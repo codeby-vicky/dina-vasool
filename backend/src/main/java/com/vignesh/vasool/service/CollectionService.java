@@ -70,4 +70,8 @@ public class CollectionService {
     public List<CollectionEntry> getHistoryForPhase(Long loanPhaseId) {
         return collectionEntryRepository.findByLoanPhaseId(loanPhaseId);
     }
+
+    public List<CollectionEntry> getByRange(LocalDate start, LocalDate end) {
+        return collectionEntryRepository.findByCollectedDateBetween(start, end);
+    }
 }

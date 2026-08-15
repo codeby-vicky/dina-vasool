@@ -14,7 +14,11 @@ public interface CollectionEntryRepository extends JpaRepository<CollectionEntry
 
     List<CollectionEntry> findByCollectedDate(LocalDate date);
 
+    List<CollectionEntry> findByCollectedDateBetween(LocalDate start, LocalDate end);
+
     List<CollectionEntry> findByLoanPhaseId(Long loanPhaseId);
+
+    List<CollectionEntry> findByLoanPhaseIdOrderByCollectedDateDesc(Long loanPhaseId);
 
     @Modifying
     @Query("delete from CollectionEntry c where c.loanPhase.id = :loanPhaseId")

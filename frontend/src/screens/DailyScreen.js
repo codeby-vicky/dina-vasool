@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import client from "../api/client";
@@ -38,6 +39,28 @@ export default function DailyScreen({ navigation }) {
       setLoading(false);
     }
   }, []);
+
+  const confirmDelete = (customer) => {
+    Alert.alert(
+      "Delete this customer?",
+      `Remove ${customer.name} and all their history? This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await client.delete(`/api/customers/${customer.id}`);
+              loadCustomers(query);
+            } catch (err) {
+              Alert.alert("Error", err.message);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   // Refresh every time this screen comes into focus - e.g. after recording a collection
   useFocusEffect(
@@ -82,6 +105,23 @@ export default function DailyScreen({ navigation }) {
         <Text style={styles.reportButtonText}>📊 Today's Report</Text>
       </TouchableOpacity>
 
+      <View style={styles.secondaryRow}>
+        <TouchableOpacity
+          style={styles.secondaryButton}
+          onPress={() => navigation.navigate("Categories")}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.secondaryButtonText}>⚙️ Categories</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.secondaryButton}
+          onPress={() => navigation.navigate("Export")}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.secondaryButtonText}>📥 Export Excel</Text>
+        </TouchableOpacity>
+      </View>
+
       <Text style={styles.sectionTitle}>Customers</Text>
       <TextInput
         style={styles.searchInput}
@@ -103,10 +143,12 @@ export default function DailyScreen({ navigation }) {
               <TouchableOpacity
                 style={styles.customerCard}
                 onPress={() => navigation.navigate("CustomerDetail", { customer: item })}
+                onLongPress={() => confirmDelete(item)}
                 activeOpacity={0.7}
               >
                 <Text style={styles.customerName}>{item.name}</Text>
                 <Text style={styles.customerPhone}>{item.phone}</Text>
+                <Text style={styles.longPressHint}>Hold to delete</Text>
               </TouchableOpacity>
             )
           }
@@ -155,6 +197,17 @@ const styles = StyleSheet.create({
     borderColor: "#334155",
   },
   reportButtonText: { color: "#F8FAFC", fontSize: scaleFont(14), fontWeight: "600" },
+  secondaryRow: { flexDirection: "row", gap: scaleWidth(10), marginBottom: scaleHeight(18) },
+  secondaryButton: {
+    flex: 1,
+    backgroundColor: "#1E293B",
+    borderRadius: 10,
+    paddingVertical: scaleHeight(10),
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#334155",
+  },
+  secondaryButtonText: { color: "#CBD5E1", fontSize: scaleFont(12), fontWeight: "600" },
   sectionTitle: {
     color: "#F8FAFC",
     fontSize: scaleFont(15),
@@ -180,6 +233,7 @@ const styles = StyleSheet.create({
   },
   customerName: { color: "#F8FAFC", fontSize: scaleFont(16), fontWeight: "600" },
   customerPhone: { color: "#94A3B8", fontSize: scaleFont(13), marginTop: scaleHeight(4) },
+  longPressHint: { color: "#475569", fontSize: scaleFont(10), marginTop: scaleHeight(4) },
   emptyText: {
     color: "#64748B",
     textAlign: "center",

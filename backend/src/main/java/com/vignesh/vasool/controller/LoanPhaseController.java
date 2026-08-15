@@ -34,6 +34,11 @@ public class LoanPhaseController {
         return loanPhaseService.getAllPhasesForCustomer(customerId);
     }
 
+    @GetMapping("/all-active")
+    public List<LoanPhase> getAllActive() {
+        return loanPhaseService.getAllActiveAndOverduePhases();
+    }
+
     @GetMapping("/{id}")
     public LoanPhase getById(@PathVariable Long id) {
         return loanPhaseService.getById(id);

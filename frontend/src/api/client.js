@@ -2,18 +2,15 @@ import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 /**
- * IMPORTANT: Set this to wherever your Spring Boot backend is reachable.
- * - Testing on the SAME WiFi as your PC: use your PC's local IP, e.g. "http://192.168.1.5:8080"
- *   (NOT "localhost" - the phone can't reach your PC's localhost over WiFi)
- * - Once deployed online (Railway/Render): use that public URL instead
- *
- * Find your PC's local IP on Windows with: ipconfig  (look for IPv4 Address)
+ * Your deployed backend on Render (Neon Postgres behind it).
+ * Free-tier Render instances sleep after inactivity - first request after
+ * that can take 50-90 seconds to wake up, hence the long timeout below.
  */
 export const BASE_URL = "https://dina-vasool.onrender.com";
 
 const client = axios.create({
   baseURL: BASE_URL,
-  timeout: 15000,
+  timeout: 90000, // 90s - accommodates Render free-tier cold starts
   headers: {
     "Content-Type": "application/json",
   },

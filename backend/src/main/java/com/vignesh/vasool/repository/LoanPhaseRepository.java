@@ -13,6 +13,7 @@ public interface LoanPhaseRepository extends JpaRepository<LoanPhase, Long> {
     List<LoanPhase> findByCustomerIdAndStatusIn(Long customerId, List<LoanPhase.PhaseStatus> statuses);
     List<LoanPhase> findByStartDate(LocalDate date);
     List<LoanPhase> findByStatus(LoanPhase.PhaseStatus status);
+    List<LoanPhase> findByStatusIn(List<LoanPhase.PhaseStatus> statuses);
     List<LoanPhase> findByCustomerId(Long customerId);
     int countByCustomerIdAndCategoryId(Long customerId, Long categoryId);
 

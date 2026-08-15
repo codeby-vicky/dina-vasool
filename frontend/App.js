@@ -13,6 +13,8 @@ import CustomersScreen from "./src/screens/CustomersScreen";
 import AddCustomerScreen from "./src/screens/AddCustomerScreen";
 import CustomerDetailScreen from "./src/screens/CustomerDetailScreen";
 import ReportsScreen from "./src/screens/ReportsScreen";
+import CategoriesScreen from "./src/screens/CategoriesScreen";
+import ExportScreen from "./src/screens/ExportScreen";
 import { scaleFont } from "./src/utils/responsive";
 
 const Stack = createNativeStackNavigator();
@@ -76,6 +78,8 @@ function RootNavigator() {
               options={({ route }) => ({ title: route.params.customer.name })}
             />
             <Stack.Screen name="Reports" component={ReportsScreen} options={{ title: "Reports" }} />
+            <Stack.Screen name="Categories" component={CategoriesScreen} options={{ title: "Categories" }} />
+            <Stack.Screen name="Export" component={ExportScreen} options={{ title: "Export Report" }} />
           </>
         )}
       </Stack.Navigator>
