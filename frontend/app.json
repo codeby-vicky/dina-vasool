@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "Dina Vasool",
+    "slug": "dina-vasool",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#0F172A"
+    },
+    "android": {
+      "package": "com.vignesh.dinavasool",
+      "permissions": ["READ_CONTACTS"],
+      "adaptiveIcon": {
+        "backgroundColor": "#0F172A"
+      }
+    },
+    "plugins": [
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Allow Dina Vasool to access your contacts to search customers by saved name."
+        }
+      ]
+    ]
+  }
+}

@@ -1,0 +1,21 @@
+@"
+# Backend (Maven/Java)
+backend/target/
+backend/.mvn/
+*.class
+
+# Frontend (Node/Expo)
+frontend/node_modules/
+frontend/.expo/
+frontend/dist/
+frontend/npm-debug.*
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+"@ | Out-File -FilePath ".gitignore" -Encoding utf8 -NoNewline
