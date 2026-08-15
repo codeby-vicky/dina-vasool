@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -9,10 +9,25 @@ import {
   ScrollView,
   Modal,
   FlatList,
+  Switch,
 } from "react-native";
 import * as Contacts from "expo-contacts";
 import client from "../api/client";
 import { scaleFont, scaleWidth, scaleHeight } from "../utils/responsive";
+
+function calcPreview(adapu, category) {
+  const amount = parseFloat(adapu);
+  if (!amount || amount <= 0 || !category) return null;
+  const aadhaiyam = (amount * category.deductionRatePer1000) / 1000;
+  const totalPayable = (amount * category.repayRatePer1000) / 1000;
+  const perDay = totalPayable / category.standardDays;
+  return {
+    aadhaiyam: aadhaiyam.toFixed(2),
+    totalPayable: totalPayable.toFixed(2),
+    received: (amount - aadhaiyam).toFixed(2),
+    perDay: Math.round(perDay),
+  };
+}
 
 export default function AddCustomerScreen({ navigation }) {
   const [name, setName] = useState("");
@@ -23,21 +38,65 @@ export default function AddCustomerScreen({ navigation }) {
   const [contacts, setContacts] = useState([]);
   const [contactSearch, setContactSearch] = useState("");
 
+  // New: optional immediate disbursement
+  const [alsoDisburse, setAlsoDisburse] = useState(false);
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [adapuAmount, setAdapuAmount] = useState("");
+
+  useEffect(() => {
+    client
+      .get("/api/categories")
+      .then(({ data }) => {
+        setCategories(data);
+        if (data.length > 0) setSelectedCategory(data[0]);
+      })
+      .catch(() => {});
+  }, []);
+
+  const preview = calcPreview(adapuAmount, selectedCategory);
+
   const saveCustomer = async () => {
     if (!name.trim() || !phone.trim()) {
       Alert.alert("Missing details", "Name and phone number are required.");
       return;
     }
+    if (alsoDisburse) {
+      const amount = parseFloat(adapuAmount);
+      if (!amount || amount <= 0) {
+        Alert.alert("Missing amount", "Enter the principal amount to disburse, or turn off 'Also disburse'.");
+        return;
+      }
+      if (!selectedCategory) {
+        Alert.alert("No category", "Create a category on the backend first, or turn off 'Also disburse'.");
+        return;
+      }
+    }
+
     setSaving(true);
     try {
-      await client.post("/api/customers", {
+      const { data: customer } = await client.post("/api/customers", {
         name: name.trim(),
         phone: phone.trim(),
         address: address.trim() || undefined,
       });
-      Alert.alert("Added", `${name} added as a customer.`, [
-        { text: "OK", onPress: () => navigation.goBack() },
-      ]);
+
+      if (alsoDisburse) {
+        await client.post("/api/loan-phases", {
+          customerId: customer.id,
+          categoryId: selectedCategory.id,
+          adapu: parseFloat(adapuAmount),
+        });
+        Alert.alert(
+          "Added & Disbursed",
+          `${name} added, and ₹${adapuAmount} disbursed (customer receives ₹${preview?.received}).`,
+          [{ text: "OK", onPress: () => navigation.goBack() }]
+        );
+      } else {
+        Alert.alert("Added", `${name} added as a customer.`, [
+          { text: "OK", onPress: () => navigation.goBack() },
+        ]);
+      }
     } catch (err) {
       Alert.alert("Error", err.message);
     } finally {
@@ -131,8 +190,82 @@ export default function AddCustomerScreen({ navigation }) {
         <Text style={styles.saveContactButtonText}>📱 Save to Phone Contacts (optional)</Text>
       </TouchableOpacity>
 
+      <View style={styles.disburseToggleRow}>
+        <Text style={styles.disburseToggleLabel}>Also give a loan now?</Text>
+        <Switch
+          value={alsoDisburse}
+          onValueChange={setAlsoDisburse}
+          trackColor={{ false: "#334155", true: "#2563EB" }}
+        />
+      </View>
+
+      {alsoDisburse && (
+        <View style={styles.disburseBox}>
+          <Text style={styles.label}>Category</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {categories.map((cat) => (
+              <TouchableOpacity
+                key={cat.id}
+                style={[
+                  styles.categoryChip,
+                  selectedCategory?.id === cat.id && styles.categoryChipSelected,
+                ]}
+                onPress={() => setSelectedCategory(cat)}
+              >
+                <Text
+                  style={[
+                    styles.categoryChipText,
+                    selectedCategory?.id === cat.id && styles.categoryChipTextSelected,
+                  ]}
+                >
+                  {cat.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          {categories.length === 0 && (
+            <Text style={styles.emptyText}>
+              No categories found. Create one via POST /api/categories on the backend first.
+            </Text>
+          )}
+
+          <Text style={styles.label}>Principal Amount (Adapu)</Text>
+          <TextInput
+            style={styles.input}
+            value={adapuAmount}
+            onChangeText={setAdapuAmount}
+            placeholder="e.g. 10000"
+            placeholderTextColor="#94A3B8"
+            keyboardType="numeric"
+          />
+
+          {preview && (
+            <View style={styles.previewBox}>
+              <View style={styles.previewRow}>
+                <Text style={styles.previewLabel}>Aadhaiyam (deducted)</Text>
+                <Text style={styles.previewValue}>₹{preview.aadhaiyam}</Text>
+              </View>
+              <View style={styles.previewRow}>
+                <Text style={styles.previewLabel}>Customer Receives</Text>
+                <Text style={styles.previewValue}>₹{preview.received}</Text>
+              </View>
+              <View style={styles.previewRow}>
+                <Text style={styles.previewLabel}>Total Payable</Text>
+                <Text style={styles.previewValue}>₹{preview.totalPayable}</Text>
+              </View>
+              <View style={styles.previewRow}>
+                <Text style={styles.previewLabel}>Suggested / day (over {selectedCategory.standardDays}d)</Text>
+                <Text style={styles.previewValue}>₹{preview.perDay}</Text>
+              </View>
+            </View>
+          )}
+        </View>
+      )}
+
       <TouchableOpacity style={styles.submitButton} onPress={saveCustomer} disabled={saving}>
-        <Text style={styles.submitButtonText}>{saving ? "Saving..." : "Add Customer"}</Text>
+        <Text style={styles.submitButtonText}>
+          {saving ? "Saving..." : alsoDisburse ? "Add Customer & Disburse" : "Add Customer"}
+        </Text>
       </TouchableOpacity>
 
       <Modal visible={pickerVisible} animationType="slide">
@@ -202,6 +335,45 @@ const styles = StyleSheet.create({
     marginBottom: scaleHeight(14),
   },
   saveContactButtonText: { color: "#F8FAFC", fontSize: scaleFont(13), fontWeight: "600" },
+  disburseToggleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#1E293B",
+    borderRadius: 10,
+    paddingHorizontal: scaleWidth(14),
+    paddingVertical: scaleHeight(12),
+    marginBottom: scaleHeight(14),
+  },
+  disburseToggleLabel: { color: "#F8FAFC", fontSize: scaleFont(14), fontWeight: "600" },
+  disburseBox: {
+    backgroundColor: "#1E293B",
+    borderRadius: 12,
+    padding: scaleWidth(14),
+    marginBottom: scaleHeight(14),
+  },
+  categoryChip: {
+    backgroundColor: "#0F172A",
+    borderRadius: 20,
+    paddingHorizontal: scaleWidth(14),
+    paddingVertical: scaleHeight(8),
+    marginRight: scaleWidth(8),
+    borderWidth: 1,
+    borderColor: "#334155",
+  },
+  categoryChipSelected: { backgroundColor: "#2563EB", borderColor: "#2563EB" },
+  categoryChipText: { color: "#CBD5E1", fontSize: scaleFont(13) },
+  categoryChipTextSelected: { color: "#fff", fontWeight: "600" },
+  emptyText: { color: "#64748B", fontSize: scaleFont(12), marginTop: scaleHeight(6) },
+  previewBox: {
+    backgroundColor: "#0F172A",
+    borderRadius: 10,
+    padding: scaleWidth(12),
+    marginTop: scaleHeight(4),
+  },
+  previewRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: scaleHeight(4) },
+  previewLabel: { color: "#94A3B8", fontSize: scaleFont(12) },
+  previewValue: { color: "#4ADE80", fontSize: scaleFont(13), fontWeight: "700" },
   submitButton: {
     backgroundColor: "#16A34A",
     borderRadius: 10,

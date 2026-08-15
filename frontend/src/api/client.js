@@ -9,7 +9,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
  *
  * Find your PC's local IP on Windows with: ipconfig  (look for IPv4 Address)
  */
-export const BASE_URL = "http://172.25.144.1:8080";
+export const BASE_URL = "https://dina-vasool.onrender.com";
 
 const client = axios.create({
   baseURL: BASE_URL,
