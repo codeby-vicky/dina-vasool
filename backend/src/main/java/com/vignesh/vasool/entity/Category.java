@@ -40,6 +40,11 @@ public class Category {
     @Column(nullable = false)
     private Integer standardDays;
 
+    // Optional - when set, selecting this category auto-fills the Adapu (principal) field
+    // with this amount so the collector doesn't have to type it manually every time.
+    @Column(precision = 12, scale = 2)
+    private BigDecimal defaultAmount;
+
     @Column(nullable = false)
     private boolean active;
 }

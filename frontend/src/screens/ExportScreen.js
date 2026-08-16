@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   ScrollView,
 } from "react-native";
-import * as XLSX from "xlsx";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import client from "../api/client";
@@ -21,9 +20,6 @@ function toIso(d) {
 function firstOfMonth(d) {
   return toIso(new Date(d.getFullYear(), d.getMonth(), 1));
 }
-function lastOfMonth(d) {
-  return toIso(new Date(d.getFullYear(), d.getMonth() + 1, 0));
-}
 function formatColHeader(dateIso) {
   const d = new Date(dateIso);
   return d.toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit" });
@@ -32,13 +28,22 @@ function isValidDate(s) {
   return /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(new Date(s).getTime());
 }
 
+/** Wraps a cell in quotes if it contains a comma, so CSV parses correctly. */
+function csvCell(value) {
+  const str = String(value ?? "");
+  if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
 /**
- * Builds and shares an .xlsx ledger.
- * Columns: No, Name, Total Payable, [one column per day in range], Total Collected (in range), Remaining.
- * "Remaining" always uses the customer's FULL payment history (not just the exported
- * range), so it's accurate even when exporting a single day or a past month.
+ * Builds and shares a .csv ledger - opens directly in Excel or Google Sheets.
+ * Columns: No, Name, Total Payable, [one column per day in range], Total (this period), Remaining.
+ * "Remaining" uses the customer's FULL payment history (not just the exported range),
+ * so it's accurate even when exporting a single day or a past month.
  */
-async function buildAndShareExcel(start, end, title, customerId) {
+async function buildAndShareCsv(start, end, title, customerId) {
   const phasesRes = await client.get("/api/loan-phases/all-active");
   let phases = phasesRes.data || [];
 
@@ -52,7 +57,6 @@ async function buildAndShareExcel(start, end, title, customerId) {
   const collectionsRes = await client.get("/api/collections/range", { params: { start, end } });
   const collections = collectionsRes.data || [];
 
-  // Build the list of date columns for the range
   const dates = [];
   let cur = new Date(start);
   const endDate = new Date(end);
@@ -61,7 +65,6 @@ async function buildAndShareExcel(start, end, title, customerId) {
     cur.setDate(cur.getDate() + 1);
   }
 
-  // Map: loanPhaseId -> { dateIso -> amount } for the exported range
   const collectedInRange = {};
   collections.forEach((c) => {
     const phaseId = c.loanPhase?.id;
@@ -71,7 +74,6 @@ async function buildAndShareExcel(start, end, title, customerId) {
       (collectedInRange[phaseId][c.collectedDate] || 0) + Number(c.amount);
   });
 
-  // Fetch each phase's FULL history (all time) to compute an accurate "Remaining" balance
   const fullHistories = await Promise.all(
     phases.map((p) => client.get(`/api/collections/loan-phase/${p.id}`))
   );
@@ -89,7 +91,7 @@ async function buildAndShareExcel(start, end, title, customerId) {
     "Total (this period)",
     "Remaining",
   ];
-  const rows = [headerRow];
+  const lines = [headerRow.map(csvCell).join(",")];
 
   phases.forEach((phase, idx) => {
     const dayMap = collectedInRange[phase.id] || {};
@@ -104,33 +106,31 @@ async function buildAndShareExcel(start, end, title, customerId) {
     });
     const remaining = Math.max(phase.totalPayable - (allTimeCollected[phase.id] || 0), 0);
 
-    rows.push([
+    const row = [
       idx + 1,
       phase.customer?.name || "",
       phase.totalPayable,
       ...dayCells,
       periodTotal,
       remaining,
-    ]);
+    ];
+    lines.push(row.map(csvCell).join(","));
   });
 
-  const worksheet = XLSX.utils.aoa_to_sheet(rows);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Collections");
-
-  const wbBase64 = XLSX.write(workbook, { type: "base64", bookType: "xlsx" });
-  const fileName = `${title.replace(/\s+/g, "_")}_${start}_to_${end}.xlsx`;
+  const csvContent = lines.join("\n");
+  const fileName = `${title.replace(/\s+/g, "_")}_${start}_to_${end}.csv`;
   const fileUri = FileSystem.documentDirectory + fileName;
 
-  await FileSystem.writeAsStringAsync(fileUri, wbBase64, {
-    encoding: FileSystem.EncodingType.Base64,
+  await FileSystem.writeAsStringAsync(fileUri, csvContent, {
+    encoding: FileSystem.EncodingType.UTF8,
   });
 
   const canShare = await Sharing.isAvailableAsync();
   if (canShare) {
     await Sharing.shareAsync(fileUri, {
-      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      mimeType: "text/csv",
       dialogTitle: title,
+      UTI: "public.comma-separated-values-text",
     });
   } else {
     Alert.alert("Saved", `File saved to: ${fileUri}`);
@@ -158,7 +158,7 @@ export default function ExportScreen({ route }) {
     setLoading(true);
     try {
       const title = customerName ? `${customerName} Report` : "Collection Report";
-      await buildAndShareExcel(startDate, endDate, title, customerId);
+      await buildAndShareCsv(startDate, endDate, title, customerId);
     } catch (err) {
       Alert.alert("Export Failed", err.message);
     } finally {
@@ -184,8 +184,9 @@ export default function ExportScreen({ route }) {
         <Text style={styles.subtitle}>Filtered to: {customerName} only</Text>
       ) : (
         <Text style={styles.subtitle}>
-          Generates an Excel (.xlsx): one row per customer, one column per day. "NP" means not
-          paid that day. Remaining is calculated from their full payment history.
+          Generates a CSV file (opens directly in Excel or Google Sheets): one row per customer,
+          one column per day. "NP" means not paid that day. Remaining is calculated from their
+          full payment history.
         </Text>
       )}
 
@@ -220,7 +221,7 @@ export default function ExportScreen({ route }) {
         {loading ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text style={styles.exportButtonText}>📄 Generate & Share Excel</Text>
+          <Text style={styles.exportButtonText}>📄 Generate & Share CSV</Text>
         )}
       </TouchableOpacity>
     </ScrollView>
