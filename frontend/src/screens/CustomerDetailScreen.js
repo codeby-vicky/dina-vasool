@@ -118,9 +118,35 @@ export default function CustomerDetailScreen({ route, navigation }) {
     }
     const amount = parseFloat(collectAmount);
     if (!amount || amount <= 0) {
-      Alert.alert("Invalid amount", "Enter a valid collection amount.");
+      Alert.alert("Invalid amount", "Enter a valid collection amount, or use 'Mark Not Paid' below.");
       return;
     }
+
+    // Check if today already has an entry - warn before replacing it
+    const todayIso = new Date().toISOString().slice(0, 10);
+    try {
+      const { data: existing } = await client.get(
+        `/api/collections/loan-phase/${selectedPhase.id}/for-date`,
+        { params: { date: todayIso } }
+      );
+      if (existing) {
+        Alert.alert(
+          "Already recorded today",
+          `Today's collection is currently ₹${existing.amount}. Replace it with ₹${amount}?`,
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Replace", onPress: () => doSubmitCollection(amount) },
+          ]
+        );
+        return;
+      }
+    } catch (err) {
+      // no existing entry (404) or check failed - proceed to create normally
+    }
+    doSubmitCollection(amount);
+  };
+
+  const doSubmitCollection = async (amount) => {
     try {
       await client.post("/api/collections", {
         loanPhaseId: selectedPhase.id,
@@ -133,6 +159,14 @@ export default function CustomerDetailScreen({ route, navigation }) {
     } catch (err) {
       Alert.alert("Error", err.message);
     }
+  };
+
+  const markNotPaid = () => {
+    // No entry is created - an absent day is already treated as "NP" (Not Paid)
+    // everywhere: the Excel export and remaining-balance calculation both just
+    // skip days with no collection entry, so nothing needs to be recorded.
+    setCollectAmount("");
+    Alert.alert("Marked", `${customer.name} noted as not paid today (${formatDate(new Date())}). No entry needed.`);
   };
 
   const submitDisbursement = async () => {
@@ -207,6 +241,13 @@ export default function CustomerDetailScreen({ route, navigation }) {
 
       <TouchableOpacity style={styles.disburseButton} onPress={() => setDisburseModal(true)}>
         <Text style={styles.disburseButtonText}>+ New Disbursement / Phase</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.exportLinkButton}
+        onPress={() => navigation.navigate("Export", { customerId: customer.id, customerName: customer.name })}
+      >
+        <Text style={styles.exportLinkButtonText}>📥 Export {customer.name}'s Payment History</Text>
       </TouchableOpacity>
 
       {phases.length === 0 && hasClosedPhases && !loading && (
@@ -304,6 +345,9 @@ export default function CustomerDetailScreen({ route, navigation }) {
           />
           <TouchableOpacity style={styles.collectButton} onPress={submitCollection}>
             <Text style={styles.collectButtonText}>Record Collection</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.notPaidButton} onPress={markNotPaid}>
+            <Text style={styles.notPaidButtonText}>— Mark Not Paid Today</Text>
           </TouchableOpacity>
 
           <Text style={[styles.sectionTitle, { marginTop: scaleHeight(20) }]}>
@@ -450,6 +494,16 @@ const styles = StyleSheet.create({
     marginBottom: scaleHeight(16),
   },
   disburseButtonText: { color: "#fff", fontSize: scaleFont(14), fontWeight: "600" },
+  exportLinkButton: {
+    backgroundColor: "#1E293B",
+    borderRadius: 10,
+    paddingVertical: scaleHeight(10),
+    alignItems: "center",
+    marginBottom: scaleHeight(16),
+    borderWidth: 1,
+    borderColor: "#334155",
+  },
+  exportLinkButtonText: { color: "#CBD5E1", fontSize: scaleFont(12), fontWeight: "600" },
   borrowAgainBox: {
     backgroundColor: "#14532D",
     borderRadius: 12,
@@ -522,6 +576,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   collectButtonText: { color: "#fff", fontSize: scaleFont(14), fontWeight: "600" },
+  notPaidButton: {
+    backgroundColor: "#334155",
+    borderRadius: 10,
+    paddingVertical: scaleHeight(10),
+    alignItems: "center",
+    marginTop: scaleHeight(8),
+  },
+  notPaidButtonText: { color: "#CBD5E1", fontSize: scaleFont(13), fontWeight: "600" },
   historyRow: {
     flexDirection: "row",
     justifyContent: "space-between",

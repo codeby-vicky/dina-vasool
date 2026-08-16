@@ -25,6 +25,11 @@ public class CollectionService {
     private final CollectionEntryRepository collectionEntryRepository;
     private final LoanPhaseRepository loanPhaseRepository;
 
+    /**
+     * Records (or replaces) a day's payment. If an entry already exists for this
+     * loan phase on this exact date, it's REPLACED with the new amount (not duplicated) -
+     * covers correcting today's collection. A different date always creates a new entry.
+     */
     public CollectionEntry record(CollectionRequest request, User collectedBy) {
         LoanPhase phase = loanPhaseRepository.findById(request.getLoanPhaseId())
                 .orElseThrow(() -> new IllegalArgumentException("Loan phase not found: " + request.getLoanPhaseId()));
@@ -33,13 +38,18 @@ public class CollectionService {
             throw new IllegalArgumentException("Collection amount must be greater than zero");
         }
 
-        CollectionEntry entry = CollectionEntry.builder()
-                .loanPhase(phase)
-                .amount(request.getAmount())
-                .collectedDate(request.getCollectedDate() != null ? request.getCollectedDate() : LocalDate.now())
-                .collectedBy(collectedBy)
-                .notes(request.getNotes())
-                .build();
+        LocalDate date = request.getCollectedDate() != null ? request.getCollectedDate() : LocalDate.now();
+
+        CollectionEntry entry = collectionEntryRepository
+                .findByLoanPhaseIdAndCollectedDate(phase.getId(), date)
+                .orElseGet(() -> CollectionEntry.builder()
+                        .loanPhase(phase)
+                        .collectedDate(date)
+                        .build());
+
+        entry.setAmount(request.getAmount());
+        entry.setCollectedBy(collectedBy);
+        entry.setNotes(request.getNotes());
 
         CollectionEntry saved = collectionEntryRepository.save(entry);
 

@@ -7,7 +7,6 @@ import lombok.Data;
 public class CustomerRequest {
     @NotBlank
     private String name;
-    @NotBlank
-    private String phone;
-    private String address;
+    private String phone; // optional
+    private String address; // "area"
 }

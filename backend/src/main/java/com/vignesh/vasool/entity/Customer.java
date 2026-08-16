@@ -25,10 +25,9 @@ public class Customer {
     @Column(nullable = false)
     private String name; // saved name, matched against phone contacts
 
-    @Column(nullable = false)
-    private String phone;
+    private String phone; // optional now - customer can be added with just a name
 
-    private String address;
+    private String address; // used as "area" for location-based search
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;

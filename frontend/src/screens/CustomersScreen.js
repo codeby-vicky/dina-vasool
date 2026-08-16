@@ -72,6 +72,28 @@ export default function CustomersScreen({ navigation }) {
     }
   };
 
+  const deleteCustomer = (customer) => {
+    Alert.alert(
+      "Delete this customer?",
+      `Remove ${customer.name} and all their history? This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await client.delete(`/api/customers/${customer.id}`);
+              fetchCustomers(query);
+            } catch (err) {
+              Alert.alert("Error", err.message);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const filteredContacts = contacts.filter((c) =>
     (c.name || "").toLowerCase().includes(contactSearch.toLowerCase())
   );
@@ -79,13 +101,13 @@ export default function CustomersScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <View style={styles.searchRow}>
-        <TextInput
-          style={styles.searchInput}
-          value={query}
-          onChangeText={handleSearch}
-          placeholder="Search saved customers..."
-          placeholderTextColor="#94A3B8"
-        />
+      <TextInput
+        style={styles.searchInput}
+        value={query}
+        onChangeText={handleSearch}
+        placeholder="Search by name, phone, or area..."
+        placeholderTextColor="#94A3B8"
+      />
       </View>
 
       <TouchableOpacity style={styles.addButton} onPress={() => navigation.navigate("AddCustomer")} activeOpacity={0.8}>
@@ -104,10 +126,13 @@ export default function CustomersScreen({ navigation }) {
             <TouchableOpacity
               style={styles.customerCard}
               onPress={() => navigation.navigate("CustomerDetail", { customer: item })}
+              onLongPress={() => deleteCustomer(item)}
               activeOpacity={0.7}
             >
               <Text style={styles.customerName}>{item.name}</Text>
-              <Text style={styles.customerPhone}>{item.phone}</Text>
+              {!!item.phone && <Text style={styles.customerPhone}>{item.phone}</Text>}
+              {!!item.address && <Text style={styles.customerArea}>📍 {item.address}</Text>}
+              <Text style={styles.longPressHint}>Hold to delete</Text>
             </TouchableOpacity>
           )
           }
@@ -179,6 +204,8 @@ const styles = StyleSheet.create({
   },
   customerName: { color: "#F8FAFC", fontSize: scaleFont(16), fontWeight: "600" },
   customerPhone: { color: "#94A3B8", fontSize: scaleFont(13), marginTop: scaleHeight(4) },
+  customerArea: { color: "#60A5FA", fontSize: scaleFont(12), marginTop: scaleHeight(2) },
+  longPressHint: { color: "#475569", fontSize: scaleFont(10), marginTop: scaleHeight(4) },
   emptyText: {
     color: "#64748B",
     textAlign: "center",

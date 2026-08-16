@@ -13,15 +13,14 @@ import { useFocusEffect } from "@react-navigation/native";
 import client from "../api/client";
 import { scaleFont, scaleWidth, scaleHeight } from "../utils/responsive";
 
+const emptyForm = { name: "", deductionRate: "50", repayRate: "1200", standardDays: "60" };
+
 export default function CategoriesScreen() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
-  const [name, setName] = useState("");
-  const [deductionRate, setDeductionRate] = useState("50");
-  const [repayRate, setRepayRate] = useState("1200");
-  const [standardDays, setStandardDays] = useState("60");
+  const [editingId, setEditingId] = useState(null); // null = creating new
+  const [form, setForm] = useState(emptyForm);
 
   const loadCategories = useCallback(async () => {
     setLoading(true);
@@ -41,34 +40,77 @@ export default function CategoriesScreen() {
     }, [loadCategories])
   );
 
-  const createCategory = async () => {
-    if (!name.trim()) {
+  const startEdit = (cat) => {
+    setEditingId(cat.id);
+    setForm({
+      name: cat.name,
+      deductionRate: String(cat.deductionRatePer1000),
+      repayRate: String(cat.repayRatePer1000),
+      standardDays: String(cat.standardDays),
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+  };
+
+  const submit = async () => {
+    if (!form.name.trim()) {
       Alert.alert("Missing name", "Give this category a name, e.g. 'Standard'.");
       return;
     }
-    const deduction = parseFloat(deductionRate);
-    const repay = parseFloat(repayRate);
-    const days = parseInt(standardDays, 10);
+    const deduction = parseFloat(form.deductionRate);
+    const repay = parseFloat(form.repayRate);
+    const days = parseInt(form.standardDays, 10);
     if (!deduction || !repay || !days) {
       Alert.alert("Missing values", "Fill in deduction rate, repay rate, and days.");
       return;
     }
     setSaving(true);
     try {
-      await client.post("/api/categories", {
-        name: name.trim(),
+      const body = {
+        name: form.name.trim(),
         deductionRatePer1000: deduction,
         repayRatePer1000: repay,
         standardDays: days,
-      });
-      setName("");
-      Alert.alert("Created", `Category "${name}" is ready to use.`);
+      };
+      if (editingId) {
+        await client.put(`/api/categories/${editingId}`, body);
+        Alert.alert("Updated", `Category "${form.name}" updated.`);
+      } else {
+        await client.post("/api/categories", body);
+        Alert.alert("Created", `Category "${form.name}" is ready to use.`);
+      }
+      cancelEdit();
       loadCategories();
     } catch (err) {
       Alert.alert("Error", err.message);
     } finally {
       setSaving(false);
     }
+  };
+
+  const deleteCategory = (cat) => {
+    Alert.alert(
+      "Delete this category?",
+      `"${cat.name}" won't be selectable for new loans anymore. Existing loans using it are unaffected.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await client.delete(`/api/categories/${cat.id}`);
+              loadCategories();
+            } catch (err) {
+              Alert.alert("Error", err.message);
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -86,11 +128,13 @@ export default function CategoriesScreen() {
             </Text>
 
             <View style={styles.formCard}>
+              <Text style={styles.formTitle}>{editingId ? "Edit Category" : "New Category"}</Text>
+
               <Text style={styles.label}>Category Name</Text>
               <TextInput
                 style={styles.input}
-                value={name}
-                onChangeText={setName}
+                value={form.name}
+                onChangeText={(v) => setForm({ ...form, name: v })}
                 placeholder="e.g. Standard"
                 placeholderTextColor="#94A3B8"
               />
@@ -98,8 +142,8 @@ export default function CategoriesScreen() {
               <Text style={styles.label}>Deducted per ₹1000 (Aadhaiyam rate)</Text>
               <TextInput
                 style={styles.input}
-                value={deductionRate}
-                onChangeText={setDeductionRate}
+                value={form.deductionRate}
+                onChangeText={(v) => setForm({ ...form, deductionRate: v })}
                 keyboardType="numeric"
                 placeholderTextColor="#94A3B8"
               />
@@ -107,8 +151,8 @@ export default function CategoriesScreen() {
               <Text style={styles.label}>Total Payable per ₹1000</Text>
               <TextInput
                 style={styles.input}
-                value={repayRate}
-                onChangeText={setRepayRate}
+                value={form.repayRate}
+                onChangeText={(v) => setForm({ ...form, repayRate: v })}
                 keyboardType="numeric"
                 placeholderTextColor="#94A3B8"
               />
@@ -116,17 +160,24 @@ export default function CategoriesScreen() {
               <Text style={styles.label}>Standard Days to Repay</Text>
               <TextInput
                 style={styles.input}
-                value={standardDays}
-                onChangeText={setStandardDays}
+                value={form.standardDays}
+                onChangeText={(v) => setForm({ ...form, standardDays: v })}
                 keyboardType="numeric"
                 placeholderTextColor="#94A3B8"
               />
 
-              <TouchableOpacity style={styles.createButton} onPress={createCategory} disabled={saving}>
-                <Text style={styles.createButtonText}>
-                  {saving ? "Creating..." : "+ Create Category"}
-                </Text>
-              </TouchableOpacity>
+              <View style={styles.formButtonRow}>
+                {editingId && (
+                  <TouchableOpacity style={styles.cancelButton} onPress={cancelEdit}>
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity style={styles.createButton} onPress={submit} disabled={saving}>
+                  <Text style={styles.createButtonText}>
+                    {saving ? "Saving..." : editingId ? "Save Changes" : "+ Create Category"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             <Text style={styles.sectionTitle}>Existing Categories</Text>
@@ -135,7 +186,17 @@ export default function CategoriesScreen() {
         }
         renderItem={({ item }) => (
           <View style={styles.categoryCard}>
-            <Text style={styles.categoryName}>{item.name}</Text>
+            <View style={styles.categoryTopRow}>
+              <Text style={styles.categoryName}>{item.name}</Text>
+              <View style={styles.categoryActions}>
+                <TouchableOpacity onPress={() => startEdit(item)} style={styles.iconButton}>
+                  <Text style={styles.iconButtonText}>✏️</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => deleteCategory(item)} style={styles.iconButton}>
+                  <Text style={styles.iconButtonText}>🗑</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
             <View style={styles.categoryRow}>
               <Text style={styles.categoryLabel}>Per ₹1000</Text>
               <Text style={styles.categoryValue}>
@@ -161,6 +222,7 @@ const styles = StyleSheet.create({
   title: { color: "#F8FAFC", fontSize: scaleFont(22), fontWeight: "700" },
   subtitle: { color: "#94A3B8", fontSize: scaleFont(12), marginTop: scaleHeight(6), marginBottom: scaleHeight(16), lineHeight: scaleFont(18) },
   formCard: { backgroundColor: "#1E293B", borderRadius: 14, padding: scaleWidth(16), marginBottom: scaleHeight(20) },
+  formTitle: { color: "#F8FAFC", fontSize: scaleFont(15), fontWeight: "700" },
   label: { color: "#CBD5E1", fontSize: scaleFont(13), marginBottom: scaleHeight(6), marginTop: scaleHeight(10) },
   input: {
     backgroundColor: "#0F172A",
@@ -172,17 +234,30 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#334155",
   },
+  formButtonRow: { flexDirection: "row", gap: scaleWidth(10), marginTop: scaleHeight(16) },
   createButton: {
+    flex: 1,
     backgroundColor: "#16A34A",
     borderRadius: 10,
     paddingVertical: scaleHeight(14),
     alignItems: "center",
-    marginTop: scaleHeight(16),
   },
   createButtonText: { color: "#fff", fontSize: scaleFont(15), fontWeight: "700" },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: "#334155",
+    borderRadius: 10,
+    paddingVertical: scaleHeight(14),
+    alignItems: "center",
+  },
+  cancelButtonText: { color: "#F8FAFC", fontSize: scaleFont(15), fontWeight: "600" },
   sectionTitle: { color: "#F8FAFC", fontSize: scaleFont(16), fontWeight: "700", marginBottom: scaleHeight(10) },
   categoryCard: { backgroundColor: "#1E293B", borderRadius: 12, padding: scaleWidth(14), marginBottom: scaleHeight(10) },
-  categoryName: { color: "#F8FAFC", fontSize: scaleFont(16), fontWeight: "700", marginBottom: scaleHeight(6) },
+  categoryTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: scaleHeight(6) },
+  categoryName: { color: "#F8FAFC", fontSize: scaleFont(16), fontWeight: "700" },
+  categoryActions: { flexDirection: "row", gap: scaleWidth(14) },
+  iconButton: { padding: scaleWidth(4) },
+  iconButtonText: { fontSize: scaleFont(16) },
   categoryRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: scaleHeight(3) },
   categoryLabel: { color: "#94A3B8", fontSize: scaleFont(12) },
   categoryValue: { color: "#F8FAFC", fontSize: scaleFont(12), fontWeight: "600" },

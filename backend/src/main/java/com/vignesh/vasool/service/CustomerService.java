@@ -20,11 +20,13 @@ public class CustomerService {
     private final CollectionEntryRepository collectionEntryRepository;
 
     public Customer create(CustomerRequest request) {
-        // Prevent duplicates: if this phone number is already saved, return
-        // the existing (first) customer instead of creating a new duplicate row.
-        List<Customer> existing = customerRepository.findByPhone(request.getPhone());
-        if (!existing.isEmpty()) {
-            return existing.get(0);
+        // Prevent duplicates by phone only when a phone number was actually given -
+        // customers added with just a name (no phone) always create a new row.
+        if (request.getPhone() != null && !request.getPhone().isBlank()) {
+            List<Customer> existing = customerRepository.findByPhone(request.getPhone());
+            if (!existing.isEmpty()) {
+                return existing.get(0);
+            }
         }
         Customer customer = Customer.builder()
                 .name(request.getName())
@@ -38,7 +40,8 @@ public class CustomerService {
         if (query == null || query.isBlank()) {
             return customerRepository.findAll();
         }
-        return customerRepository.findByNameContainingIgnoreCaseOrPhoneContaining(query, query);
+        return customerRepository.findByNameContainingIgnoreCaseOrPhoneContainingOrAddressContainingIgnoreCase(
+                query, query, query);
     }
 
     public Customer getById(Long id) {

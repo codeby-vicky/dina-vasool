@@ -1,23 +1,11 @@
 import React, { useCallback, useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  FlatList,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-  Alert,
-} from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import client from "../api/client";
 import { scaleFont, scaleWidth, scaleHeight } from "../utils/responsive";
 
 export default function DailyScreen({ navigation }) {
   const [summary, setSummary] = useState({ totalCollection: 0 });
-  const [customers, setCustomers] = useState([]);
-  const [query, setQuery] = useState("");
-  const [loading, setLoading] = useState(false);
 
   const loadSummary = useCallback(async () => {
     try {
@@ -28,52 +16,12 @@ export default function DailyScreen({ navigation }) {
     }
   }, []);
 
-  const loadCustomers = useCallback(async (q) => {
-    setLoading(true);
-    try {
-      const { data } = await client.get("/api/customers", { params: q ? { q } : {} });
-      setCustomers(Array.isArray(data) ? data : []);
-    } catch (err) {
-      setCustomers([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const confirmDelete = (customer) => {
-    Alert.alert(
-      "Delete this customer?",
-      `Remove ${customer.name} and all their history? This cannot be undone.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await client.delete(`/api/customers/${customer.id}`);
-              loadCustomers(query);
-            } catch (err) {
-              Alert.alert("Error", err.message);
-            }
-          },
-        },
-      ]
-    );
-  };
-
   // Refresh every time this screen comes into focus - e.g. after recording a collection
   useFocusEffect(
     useCallback(() => {
       loadSummary();
-      loadCustomers(query);
-    }, [loadSummary, loadCustomers, query])
+    }, [loadSummary])
   );
-
-  const handleSearch = (text) => {
-    setQuery(text);
-    loadCustomers(text);
-  };
 
   return (
     <View style={styles.container}>
@@ -122,41 +70,10 @@ export default function DailyScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.sectionTitle}>Customers</Text>
-      <TextInput
-        style={styles.searchInput}
-        value={query}
-        onChangeText={handleSearch}
-        placeholder="Search saved customers..."
-        placeholderTextColor="#94A3B8"
-      />
-
-      {loading ? (
-        <ActivityIndicator style={{ marginTop: scaleHeight(20) }} color="#2563EB" />
-      ) : (
-        <FlatList
-          data={customers}
-          keyExtractor={(item, idx) => (item?.id != null ? String(item.id) : `tmp-${idx}`)}
-          contentContainerStyle={{ paddingBottom: scaleHeight(30) }}
-          renderItem={({ item }) =>
-            !item?.id ? null : (
-              <TouchableOpacity
-                style={styles.customerCard}
-                onPress={() => navigation.navigate("CustomerDetail", { customer: item })}
-                onLongPress={() => confirmDelete(item)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.customerName}>{item.name}</Text>
-                <Text style={styles.customerPhone}>{item.phone}</Text>
-                <Text style={styles.longPressHint}>Hold to delete</Text>
-              </TouchableOpacity>
-            )
-          }
-          ListEmptyComponent={
-            <Text style={styles.emptyText}>No customers yet. Tap "+ Add Customer" above.</Text>
-          }
-        />
-      )}
+      <Text style={styles.hintText}>
+        Tap "Collect" to search and select a customer — the customer list now lives there instead
+        of here, to keep this screen focused on today's summary.
+      </Text>
     </View>
   );
 }
@@ -208,36 +125,11 @@ const styles = StyleSheet.create({
     borderColor: "#334155",
   },
   secondaryButtonText: { color: "#CBD5E1", fontSize: scaleFont(12), fontWeight: "600" },
-  sectionTitle: {
-    color: "#F8FAFC",
-    fontSize: scaleFont(15),
-    fontWeight: "700",
-    marginBottom: scaleHeight(8),
-  },
-  searchInput: {
-    backgroundColor: "#1E293B",
-    borderRadius: 10,
-    paddingHorizontal: scaleWidth(14),
-    paddingVertical: scaleHeight(10),
-    color: "#F8FAFC",
-    fontSize: scaleFont(14),
-    borderWidth: 1,
-    borderColor: "#334155",
-    marginBottom: scaleHeight(10),
-  },
-  customerCard: {
-    backgroundColor: "#1E293B",
-    borderRadius: 12,
-    padding: scaleWidth(14),
-    marginBottom: scaleHeight(10),
-  },
-  customerName: { color: "#F8FAFC", fontSize: scaleFont(16), fontWeight: "600" },
-  customerPhone: { color: "#94A3B8", fontSize: scaleFont(13), marginTop: scaleHeight(4) },
-  longPressHint: { color: "#475569", fontSize: scaleFont(10), marginTop: scaleHeight(4) },
-  emptyText: {
-    color: "#64748B",
+  hintText: {
+    color: "#475569",
+    fontSize: scaleFont(12),
     textAlign: "center",
-    marginTop: scaleHeight(20),
-    fontSize: scaleFont(13),
+    marginTop: scaleHeight(10),
+    lineHeight: scaleFont(18),
   },
 });

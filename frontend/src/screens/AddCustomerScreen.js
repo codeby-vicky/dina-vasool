@@ -57,8 +57,8 @@ export default function AddCustomerScreen({ navigation }) {
   const preview = calcPreview(adapuAmount, selectedCategory);
 
   const saveCustomer = async () => {
-    if (!name.trim() || !phone.trim()) {
-      Alert.alert("Missing details", "Name and phone number are required.");
+    if (!name.trim()) {
+      Alert.alert("Missing name", "Customer name is required (phone number is optional).");
       return;
     }
     if (alsoDisburse) {
@@ -167,7 +167,7 @@ export default function AddCustomerScreen({ navigation }) {
         placeholderTextColor="#94A3B8"
       />
 
-      <Text style={styles.label}>Phone Number</Text>
+      <Text style={styles.label}>Phone Number (optional)</Text>
       <TextInput
         style={styles.input}
         value={phone}
@@ -177,12 +177,12 @@ export default function AddCustomerScreen({ navigation }) {
         keyboardType="phone-pad"
       />
 
-      <Text style={styles.label}>Address (optional)</Text>
+      <Text style={styles.label}>Area</Text>
       <TextInput
         style={styles.input}
         value={address}
         onChangeText={setAddress}
-        placeholder="Optional"
+        placeholder="e.g. Pallavaram (used to search customers by area)"
         placeholderTextColor="#94A3B8"
       />
 

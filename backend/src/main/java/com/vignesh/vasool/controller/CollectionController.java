@@ -47,6 +47,18 @@ public class CollectionController {
         return collectionService.getHistoryForPhase(loanPhaseId);
     }
 
+    /** Checks whether today's (or a given date's) collection already exists for this phase,
+     *  so the app can warn "you're about to replace ₹X" before overwriting it. */
+    @GetMapping("/loan-phase/{loanPhaseId}/for-date")
+    public CollectionEntry getForDate(
+            @PathVariable Long loanPhaseId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        return collectionService.getHistoryForPhase(loanPhaseId).stream()
+                .filter(e -> e.getCollectedDate().equals(date))
+                .findFirst()
+                .orElse(null);
+    }
+
     /** All collections within a date range - powers the Excel export (daily/monthly ledger). */
     @GetMapping("/range")
     public List<CollectionEntry> getByRange(
