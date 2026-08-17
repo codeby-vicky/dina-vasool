@@ -26,6 +26,20 @@ function suggestedDailyAmount(phase) {
   return String(Math.round(perDay));
 }
 
+function calcDisbursePreview(adapu, category) {
+  const amount = parseFloat(adapu);
+  if (!amount || amount <= 0 || !category) return null;
+  const aadhaiyam = (amount * category.deductionRatePer1000) / 1000;
+  const totalPayable = (amount * category.repayRatePer1000) / 1000;
+  const perDay = totalPayable / category.standardDays;
+  return {
+    aadhaiyam: aadhaiyam.toFixed(2),
+    totalPayable: totalPayable.toFixed(2),
+    received: (amount - aadhaiyam).toFixed(2),
+    perDay: Math.round(perDay),
+  };
+}
+
 function formatDate(dateStr) {
   const d = new Date(dateStr);
   return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
@@ -76,7 +90,10 @@ export default function CustomerDetailScreen({ route, navigation }) {
     try {
       const { data } = await client.get("/api/categories");
       setCategories(data);
-      if (data.length > 0) setSelectedCategory(data[0]);
+      if (data.length > 0) {
+        setSelectedCategory(data[0]);
+        if (data[0].defaultAmount) setAdapuAmount(String(data[0].defaultAmount));
+      }
     } catch (err) {
       // non-fatal
     }
@@ -386,7 +403,10 @@ export default function CustomerDetailScreen({ route, navigation }) {
                     styles.categoryChip,
                     selectedCategory?.id === cat.id && styles.categoryChipSelected,
                   ]}
-                  onPress={() => setSelectedCategory(cat)}
+                  onPress={() => {
+                    setSelectedCategory(cat);
+                    if (cat.defaultAmount) setAdapuAmount(String(cat.defaultAmount));
+                  }}
                 >
                   <Text
                     style={[
@@ -394,7 +414,7 @@ export default function CustomerDetailScreen({ route, navigation }) {
                       selectedCategory?.id === cat.id && styles.categoryChipTextSelected,
                     ]}
                   >
-                    {cat.name}
+                    {cat.name} (×{cat.repayRatePer1000}/1000)
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -405,7 +425,7 @@ export default function CustomerDetailScreen({ route, navigation }) {
               </Text>
             )}
 
-            <Text style={styles.label}>Adapu (Principal Amount)</Text>
+            <Text style={styles.label}>Adapu (Principal Amount) — required</Text>
             <TextInput
               style={styles.amountInput}
               value={adapuAmount}
@@ -414,6 +434,31 @@ export default function CustomerDetailScreen({ route, navigation }) {
               placeholderTextColor="#94A3B8"
               keyboardType="numeric"
             />
+
+            {(() => {
+              const preview = calcDisbursePreview(adapuAmount, selectedCategory);
+              if (!preview) return null;
+              return (
+                <View style={styles.previewBox}>
+                  <View style={styles.previewRow}>
+                    <Text style={styles.previewLabel}>Aadhaiyam (deducted)</Text>
+                    <Text style={styles.previewValue}>₹{preview.aadhaiyam}</Text>
+                  </View>
+                  <View style={styles.previewRow}>
+                    <Text style={styles.previewLabel}>Customer Receives</Text>
+                    <Text style={styles.previewValue}>₹{preview.received}</Text>
+                  </View>
+                  <View style={styles.previewRow}>
+                    <Text style={styles.previewLabel}>Total Payable</Text>
+                    <Text style={styles.previewValue}>₹{preview.totalPayable}</Text>
+                  </View>
+                  <View style={styles.previewRow}>
+                    <Text style={styles.previewLabel}>Suggested / day (over {selectedCategory.standardDays}d)</Text>
+                    <Text style={styles.previewValue}>₹{preview.perDay}</Text>
+                  </View>
+                </View>
+              );
+            })()}
 
             <TouchableOpacity onPress={() => setShowOverrides(!showOverrides)}>
               <Text style={styles.overrideToggle}>
@@ -619,6 +664,16 @@ const styles = StyleSheet.create({
   categoryChipSelected: { backgroundColor: "#2563EB", borderColor: "#2563EB" },
   categoryChipText: { color: "#CBD5E1", fontSize: scaleFont(13) },
   categoryChipTextSelected: { color: "#fff", fontWeight: "600" },
+  previewBox: {
+    backgroundColor: "#0F172A",
+    borderRadius: 10,
+    padding: scaleWidth(12),
+    marginTop: scaleHeight(4),
+    marginBottom: scaleHeight(10),
+  },
+  previewRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: scaleHeight(4) },
+  previewLabel: { color: "#94A3B8", fontSize: scaleFont(12) },
+  previewValue: { color: "#4ADE80", fontSize: scaleFont(13), fontWeight: "700" },
   overrideToggle: {
     color: "#60A5FA",
     fontSize: scaleFont(13),

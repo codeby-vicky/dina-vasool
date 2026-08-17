@@ -34,6 +34,7 @@ export default function AddCustomerScreen({ navigation }) {
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [saving, setSaving] = useState(false);
+  const [longWait, setLongWait] = useState(false);
   const [pickerVisible, setPickerVisible] = useState(false);
   const [contacts, setContacts] = useState([]);
   const [contactSearch, setContactSearch] = useState("");
@@ -49,7 +50,10 @@ export default function AddCustomerScreen({ navigation }) {
       .get("/api/categories")
       .then(({ data }) => {
         setCategories(data);
-        if (data.length > 0) setSelectedCategory(data[0]);
+        if (data.length > 0) {
+          setSelectedCategory(data[0]);
+          if (data[0].defaultAmount) setAdapuAmount(String(data[0].defaultAmount));
+        }
       })
       .catch(() => {});
   }, []);
@@ -74,10 +78,12 @@ export default function AddCustomerScreen({ navigation }) {
     }
 
     setSaving(true);
+    setLongWait(false);
+    const longWaitTimer = setTimeout(() => setLongWait(true), 6000);
     try {
       const { data: customer } = await client.post("/api/customers", {
         name: name.trim(),
-        phone: phone.trim(),
+        phone: phone.trim() || undefined,
         address: address.trim() || undefined,
       });
 
@@ -100,7 +106,9 @@ export default function AddCustomerScreen({ navigation }) {
     } catch (err) {
       Alert.alert("Error", err.message);
     } finally {
+      clearTimeout(longWaitTimer);
       setSaving(false);
+      setLongWait(false);
     }
   };
 
@@ -210,7 +218,10 @@ export default function AddCustomerScreen({ navigation }) {
                   styles.categoryChip,
                   selectedCategory?.id === cat.id && styles.categoryChipSelected,
                 ]}
-                onPress={() => setSelectedCategory(cat)}
+                onPress={() => {
+                  setSelectedCategory(cat);
+                  if (cat.defaultAmount) setAdapuAmount(String(cat.defaultAmount));
+                }}
               >
                 <Text
                   style={[
@@ -264,7 +275,13 @@ export default function AddCustomerScreen({ navigation }) {
 
       <TouchableOpacity style={styles.submitButton} onPress={saveCustomer} disabled={saving}>
         <Text style={styles.submitButtonText}>
-          {saving ? "Saving..." : alsoDisburse ? "Add Customer & Disburse" : "Add Customer"}
+          {saving
+            ? longWait
+              ? "Still working — server waking up, please wait..."
+              : "Saving..."
+            : alsoDisburse
+            ? "Add Customer & Disburse"
+            : "Add Customer"}
         </Text>
       </TouchableOpacity>
 

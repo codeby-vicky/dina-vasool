@@ -13,7 +13,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import client from "../api/client";
 import { scaleFont, scaleWidth, scaleHeight } from "../utils/responsive";
 
-const emptyForm = { name: "", deductionRate: "50", repayRate: "1200", standardDays: "60" };
+const emptyForm = { name: "", deductionRate: "50", repayRate: "1200", standardDays: "60", defaultAmount: "" };
 
 export default function CategoriesScreen() {
   const [categories, setCategories] = useState([]);
@@ -47,6 +47,7 @@ export default function CategoriesScreen() {
       deductionRate: String(cat.deductionRatePer1000),
       repayRate: String(cat.repayRatePer1000),
       standardDays: String(cat.standardDays),
+      defaultAmount: cat.defaultAmount ? String(cat.defaultAmount) : "",
     });
   };
 
@@ -74,6 +75,7 @@ export default function CategoriesScreen() {
         deductionRatePer1000: deduction,
         repayRatePer1000: repay,
         standardDays: days,
+        defaultAmount: form.defaultAmount ? parseFloat(form.defaultAmount) : null,
       };
       if (editingId) {
         await client.put(`/api/categories/${editingId}`, body);
@@ -166,6 +168,16 @@ export default function CategoriesScreen() {
                 placeholderTextColor="#94A3B8"
               />
 
+              <Text style={styles.label}>Default Principal Amount (optional)</Text>
+              <TextInput
+                style={styles.input}
+                value={form.defaultAmount}
+                onChangeText={(v) => setForm({ ...form, defaultAmount: v })}
+                placeholder="e.g. 1000 — auto-fills when this category is picked"
+                keyboardType="numeric"
+                placeholderTextColor="#94A3B8"
+              />
+
               <View style={styles.formButtonRow}>
                 {editingId && (
                   <TouchableOpacity style={styles.cancelButton} onPress={cancelEdit}>
@@ -207,6 +219,12 @@ export default function CategoriesScreen() {
               <Text style={styles.categoryLabel}>Standard Days</Text>
               <Text style={styles.categoryValue}>{item.standardDays}</Text>
             </View>
+            {!!item.defaultAmount && (
+              <View style={styles.categoryRow}>
+                <Text style={styles.categoryLabel}>Default Amount</Text>
+                <Text style={styles.categoryValue}>₹{item.defaultAmount}</Text>
+              </View>
+            )}
           </View>
         )}
         ListEmptyComponent={
