@@ -33,6 +33,7 @@ public class CategoryController {
         existing.setDeductionRatePer1000(updated.getDeductionRatePer1000());
         existing.setRepayRatePer1000(updated.getRepayRatePer1000());
         existing.setStandardDays(updated.getStandardDays());
+        existing.setDefaultAmount(updated.getDefaultAmount());
         return categoryRepository.save(existing);
     }
 
