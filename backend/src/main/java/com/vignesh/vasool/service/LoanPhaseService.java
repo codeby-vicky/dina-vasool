@@ -93,7 +93,7 @@ public class LoanPhaseService {
 
     /** All currently active/overdue loan phases across every customer - used for the Excel export. */
     public List<LoanPhase> getAllActiveAndOverduePhases() {
-        return loanPhaseRepository.findByStatusIn(List.of(LoanPhase.PhaseStatus.ACTIVE, LoanPhase.PhaseStatus.OVERDUE));
+        return loanPhaseRepository.findByStatusInWithCustomer(List.of(LoanPhase.PhaseStatus.ACTIVE, LoanPhase.PhaseStatus.OVERDUE));
     }
 
     public List<LoanPhase> getPhasesDisbursedOn(LocalDate date) {

@@ -17,6 +17,12 @@ public interface LoanPhaseRepository extends JpaRepository<LoanPhase, Long> {
     List<LoanPhase> findByCustomerId(Long customerId);
     int countByCustomerIdAndCategoryId(Long customerId, Long categoryId);
 
+    /** Same as findByStatusIn but forces the customer relationship to load eagerly -
+     *  needed because customer is lazy-fetched by default and was silently coming
+     *  back null in JSON responses, breaking the paid/unpaid status dots. */
+    @Query("select p from LoanPhase p join fetch p.customer where p.status in :statuses")
+    List<LoanPhase> findByStatusInWithCustomer(@Param("statuses") List<LoanPhase.PhaseStatus> statuses);
+
     @Modifying
     @Query("delete from LoanPhase p where p.customer.id = :customerId")
     void deleteByCustomerId(@Param("customerId") Long customerId);
