@@ -67,7 +67,9 @@ export default function CustomersScreen({ navigation }) {
       });
       setStatusMap(map);
     } catch (err) {
-      // status dots are a nice-to-have - don't block the list on failure
+      // Temporary: surface the error so we can diagnose why dots aren't showing.
+      // Remove this Alert once confirmed working.
+      Alert.alert("Status dots failed to load", err.message);
     }
   }, []);
 
