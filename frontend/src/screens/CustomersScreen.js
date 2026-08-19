@@ -10,9 +10,14 @@ import {
   ActivityIndicator,
   Modal,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import * as Contacts from "expo-contacts";
 import client from "../api/client";
 import { scaleFont, scaleWidth, scaleHeight } from "../utils/responsive";
+
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 export default function CustomersScreen({ navigation }) {
   const [query, setQuery] = useState("");
@@ -21,6 +26,9 @@ export default function CustomersScreen({ navigation }) {
   const [pickerVisible, setPickerVisible] = useState(false);
   const [contacts, setContacts] = useState([]);
   const [contactSearch, setContactSearch] = useState("");
+
+  // customerId -> "paid" | "unpaid" | "none" (no active loan at all)
+  const [statusMap, setStatusMap] = useState({});
 
   const fetchCustomers = useCallback(async (q) => {
     setLoading(true);
@@ -34,9 +42,46 @@ export default function CustomersScreen({ navigation }) {
     }
   }, []);
 
+  // Builds today's paid/unpaid status per customer:
+  // - fetch every active/overdue loan phase (has customer + phase id)
+  // - fetch today's collection entries (has loanPhase id)
+  // - a customer is "paid" if any of their active phases were collected today
+  const loadTodayStatus = useCallback(async () => {
+    try {
+      const [phasesRes, collectionsRes] = await Promise.all([
+        client.get("/api/loan-phases/all-active"),
+        client.get("/api/collections", { params: { date: todayIso() } }),
+      ]);
+      const phases = phasesRes.data || [];
+      const todayCollections = collectionsRes.data || [];
+
+      const paidPhaseIds = new Set(todayCollections.map((c) => c.loanPhase?.id).filter(Boolean));
+
+      const map = {};
+      phases.forEach((phase) => {
+        const custId = phase.customer?.id;
+        if (!custId) return;
+        const alreadyPaid = map[custId] === "paid";
+        if (alreadyPaid) return; // one paid phase is enough to mark them green
+        map[custId] = paidPhaseIds.has(phase.id) ? "paid" : "unpaid";
+      });
+      setStatusMap(map);
+    } catch (err) {
+      // status dots are a nice-to-have - don't block the list on failure
+    }
+  }, []);
+
   useEffect(() => {
     fetchCustomers("");
   }, [fetchCustomers]);
+
+  // Refresh the paid/unpaid dots every time this screen comes into focus
+  // (e.g. right after recording a collection and coming back)
+  useFocusEffect(
+    useCallback(() => {
+      loadTodayStatus();
+    }, [loadTodayStatus])
+  );
 
   const handleSearch = (text) => {
     setQuery(text);
@@ -101,18 +146,29 @@ export default function CustomersScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <View style={styles.searchRow}>
-      <TextInput
-        style={styles.searchInput}
-        value={query}
-        onChangeText={handleSearch}
-        placeholder="Search by name, phone, or area..."
-        placeholderTextColor="#94A3B8"
-      />
+        <TextInput
+          style={styles.searchInput}
+          value={query}
+          onChangeText={handleSearch}
+          placeholder="Search by name, phone, or area..."
+          placeholderTextColor="#94A3B8"
+        />
       </View>
 
       <TouchableOpacity style={styles.addButton} onPress={() => navigation.navigate("AddCustomer")} activeOpacity={0.8}>
         <Text style={styles.addButtonText}>+ Add Customer</Text>
       </TouchableOpacity>
+
+      <View style={styles.legendRow}>
+        <View style={styles.legendItem}>
+          <View style={[styles.dot, styles.dotPaid]} />
+          <Text style={styles.legendText}>Paid today</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <View style={[styles.dot, styles.dotUnpaid]} />
+          <Text style={styles.legendText}>Not paid today</Text>
+        </View>
+      </View>
 
       {loading ? (
         <ActivityIndicator style={{ marginTop: scaleHeight(20) }} color="#2563EB" />
@@ -121,21 +177,28 @@ export default function CustomersScreen({ navigation }) {
           data={customers}
           keyExtractor={(item, idx) => (item?.id != null ? String(item.id) : `tmp-${idx}`)}
           contentContainerStyle={{ paddingBottom: scaleHeight(20) }}
-          renderItem={({ item }) =>
-            !item?.id ? null : (
-            <TouchableOpacity
-              style={styles.customerCard}
-              onPress={() => navigation.navigate("CustomerDetail", { customer: item })}
-              onLongPress={() => deleteCustomer(item)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.customerName}>{item.name}</Text>
-              {!!item.phone && <Text style={styles.customerPhone}>{item.phone}</Text>}
-              {!!item.address && <Text style={styles.customerArea}>📍 {item.address}</Text>}
-              <Text style={styles.longPressHint}>Hold to delete</Text>
-            </TouchableOpacity>
-          )
-          }
+          renderItem={({ item }) => {
+            if (!item?.id) return null;
+            const status = statusMap[item.id]; // "paid" | "unpaid" | undefined (no active loan)
+            return (
+              <TouchableOpacity
+                style={styles.customerCard}
+                onPress={() => navigation.navigate("CustomerDetail", { customer: item })}
+                onLongPress={() => deleteCustomer(item)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.customerTopRow}>
+                  {!!status && (
+                    <View style={[styles.dot, status === "paid" ? styles.dotPaid : styles.dotUnpaid]} />
+                  )}
+                  <Text style={styles.customerName}>{item.name}</Text>
+                </View>
+                {!!item.phone && <Text style={styles.customerPhone}>{item.phone}</Text>}
+                {!!item.address && <Text style={styles.customerArea}>📍 {item.address}</Text>}
+                <Text style={styles.longPressHint}>Hold to delete</Text>
+              </TouchableOpacity>
+            );
+          }}
           ListEmptyComponent={
             <Text style={styles.emptyText}>No customers yet. Add one from contacts above.</Text>
           }
@@ -193,15 +256,22 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingVertical: scaleHeight(12),
     alignItems: "center",
-    marginBottom: scaleHeight(14),
+    marginBottom: scaleHeight(10),
   },
   addButtonText: { color: "#fff", fontSize: scaleFont(14), fontWeight: "600" },
+  legendRow: { flexDirection: "row", gap: scaleWidth(16), marginBottom: scaleHeight(12) },
+  legendItem: { flexDirection: "row", alignItems: "center", gap: scaleWidth(6) },
+  legendText: { color: "#94A3B8", fontSize: scaleFont(11) },
+  dot: { width: scaleWidth(10), height: scaleWidth(10), borderRadius: scaleWidth(5) },
+  dotPaid: { backgroundColor: "#22C55E" },
+  dotUnpaid: { backgroundColor: "#EF4444" },
   customerCard: {
     backgroundColor: "#1E293B",
     borderRadius: 12,
     padding: scaleWidth(14),
     marginBottom: scaleHeight(10),
   },
+  customerTopRow: { flexDirection: "row", alignItems: "center", gap: scaleWidth(8) },
   customerName: { color: "#F8FAFC", fontSize: scaleFont(16), fontWeight: "600" },
   customerPhone: { color: "#94A3B8", fontSize: scaleFont(13), marginTop: scaleHeight(4) },
   customerArea: { color: "#60A5FA", fontSize: scaleFont(12), marginTop: scaleHeight(2) },
