@@ -7,6 +7,7 @@ import { TouchableOpacity, Text, View } from "react-native";
 
 import { AuthProvider, useAuth } from "./src/context/AuthContext";
 import LoginScreen from "./src/screens/LoginScreen";
+import SignupScreen from "./src/screens/SignupScreen";
 import HomeScreen from "./src/screens/HomeScreen";
 import DailyScreen from "./src/screens/DailyScreen";
 import CustomersScreen from "./src/screens/CustomersScreen";
@@ -50,6 +51,7 @@ function RootNavigator() {
       <Stack.Navigator>
         {!user ? (
           <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="Signup" component={SignupScreen} options={{ headerShown: false }} />
         ) : (
           <>
             <Stack.Screen

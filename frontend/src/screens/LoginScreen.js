@@ -14,7 +14,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { scaleFont, scaleWidth, scaleHeight, isTablet } from "../utils/responsive";
 
-export default function LoginScreen() {
+export default function LoginScreen({ navigation }) {
   const { login } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -85,6 +85,10 @@ export default function LoginScreen() {
               <Text style={styles.buttonText}>Log In</Text>
             )}
           </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => navigation.navigate("Signup")} style={{ marginTop: scaleHeight(18) }}>
+            <Text style={styles.signupLink}>Starting a new daily collection business? Sign Up</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -141,4 +145,5 @@ const styles = StyleSheet.create({
     marginTop: scaleHeight(24),
   },
   buttonText: { color: "#fff", fontSize: scaleFont(16), fontWeight: "600" },
+  signupLink: { color: "#60A5FA", fontSize: scaleFont(12), textAlign: "center" },
 });

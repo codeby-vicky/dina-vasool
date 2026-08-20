@@ -83,7 +83,7 @@ public class LoanPhaseService {
     }
 
     public List<LoanPhase> getActivePhasesForCustomer(Long customerId) {
-        return loanPhaseRepository.findByCustomerIdAndStatusIn(
+        return loanPhaseRepository.findByCustomerIdAndStatusInWithCategory(
                 customerId, List.of(LoanPhase.PhaseStatus.ACTIVE, LoanPhase.PhaseStatus.OVERDUE));
     }
 

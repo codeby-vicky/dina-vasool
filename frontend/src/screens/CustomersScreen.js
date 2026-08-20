@@ -57,15 +57,17 @@ export default function CustomersScreen({ navigation }) {
 
       const paidPhaseIds = new Set(todayCollections.map((c) => c.loanPhase?.id).filter(Boolean));
 
-      const map = {};
+      // Track paid/total per customer instead of a single yes/no - so a customer
+      // with 2 active loans shows "1/2 PAID" etc, not just a flat paid/unpaid.
+      const counts = {}; // custId -> { paid, total }
       phases.forEach((phase) => {
         const custId = phase.customer?.id;
         if (!custId) return;
-        const alreadyPaid = map[custId] === "paid";
-        if (alreadyPaid) return; // one paid phase is enough to mark them green
-        map[custId] = paidPhaseIds.has(phase.id) ? "paid" : "unpaid";
+        if (!counts[custId]) counts[custId] = { paid: 0, total: 0 };
+        counts[custId].total += 1;
+        if (paidPhaseIds.has(phase.id)) counts[custId].paid += 1;
       });
-      setStatusMap(map);
+      setStatusMap(counts);
     } catch (err) {
       // status labels are a nice-to-have - don't block the list on failure
     }
@@ -161,12 +163,16 @@ export default function CustomersScreen({ navigation }) {
 
       <View style={styles.legendRow}>
         <View style={styles.legendItem}>
-          <View style={[styles.dot, styles.dotPaid]} />
-          <Text style={styles.legendText}>Paid today</Text>
+          <View style={[styles.dot, styles.dotUnpaid]} />
+          <Text style={styles.legendText}>0 paid</Text>
         </View>
         <View style={styles.legendItem}>
-          <View style={[styles.dot, styles.dotUnpaid]} />
-          <Text style={styles.legendText}>Not paid today</Text>
+          <View style={[styles.dot, { backgroundColor: "#F59E0B" }]} />
+          <Text style={styles.legendText}>Partial</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <View style={[styles.dot, styles.dotPaid]} />
+          <Text style={styles.legendText}>All paid</Text>
         </View>
       </View>
 
@@ -179,7 +185,15 @@ export default function CustomersScreen({ navigation }) {
           contentContainerStyle={{ paddingBottom: scaleHeight(20) }}
           renderItem={({ item }) => {
             if (!item?.id) return null;
-            const status = statusMap[item.id]; // "paid" | "unpaid" | undefined (no active loan)
+            const count = statusMap[item.id]; // { paid, total } | undefined (no active loan)
+            let labelStyle = null;
+            let labelText = null;
+            if (count && count.total > 0) {
+              labelText = `${count.paid}/${count.total} PAID`;
+              if (count.paid === 0) labelStyle = styles.labelNone;
+              else if (count.paid === count.total) labelStyle = styles.labelFull;
+              else labelStyle = styles.labelPartial;
+            }
             return (
               <TouchableOpacity
                 style={styles.customerCard}
@@ -188,11 +202,9 @@ export default function CustomersScreen({ navigation }) {
                 activeOpacity={0.7}
               >
                 <View style={styles.customerTopRow}>
-                  {!!status && (
-                    <View style={[styles.statusLabel, status === "paid" ? styles.labelPaid : styles.labelUnpaid]}>
-                      <Text style={styles.statusLabelText}>
-                        {status === "paid" ? "PAID" : "NOT PAID"}
-                      </Text>
+                  {!!labelStyle && (
+                    <View style={[styles.statusLabel, labelStyle]}>
+                      <Text style={styles.statusLabelText}>{labelText}</Text>
                     </View>
                   )}
                   <Text style={styles.customerName}>{item.name}</Text>
@@ -270,8 +282,9 @@ const styles = StyleSheet.create({
   dotPaid: { backgroundColor: "#22C55E" },
   dotUnpaid: { backgroundColor: "#EF4444" },
   statusLabel: { paddingHorizontal: scaleWidth(6), paddingVertical: scaleHeight(2), borderRadius: 4 },
-  labelPaid: { backgroundColor: "#166534" },
-  labelUnpaid: { backgroundColor: "#7F1D1D" },
+  labelNone: { backgroundColor: "#7F1D1D" },
+  labelPartial: { backgroundColor: "#92400E" },
+  labelFull: { backgroundColor: "#166534" },
   statusLabelText: { color: "#fff", fontSize: scaleFont(9), fontWeight: "700" },
   customerCard: {
     backgroundColor: "#1E293B",

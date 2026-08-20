@@ -24,13 +24,21 @@ export function AuthProvider({ children }) {
     return data;
   };
 
+  // Used right after signup - the signup endpoint already returns a full
+  // login response (token included), so we just store it, same as login().
+  const setUserDirectly = async (data) => {
+    await AsyncStorage.setItem("token", data.token);
+    await AsyncStorage.setItem("user", JSON.stringify(data));
+    setUser(data);
+  };
+
   const logout = async () => {
     await AsyncStorage.multiRemove(["token", "user"]);
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, setUserDirectly }}>
       {children}
     </AuthContext.Provider>
   );

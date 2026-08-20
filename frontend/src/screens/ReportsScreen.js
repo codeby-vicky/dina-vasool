@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Alert,
   ActivityIndicator,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import client from "../api/client";
 import { scaleFont, scaleWidth, scaleHeight } from "../utils/responsive";
 
@@ -22,6 +23,55 @@ export default function ReportsScreen() {
   const [loading, setLoading] = useState(false);
   const [closing, setClosing] = useState(false);
   const [additionalInvestment, setAdditionalInvestment] = useState("");
+
+  // Expenses - multiple quick entries (petrol, milk, groceries...), each its own tap
+  const [expenses, setExpenses] = useState([]);
+  const [expenseDesc, setExpenseDesc] = useState("");
+  const [expenseAmount, setExpenseAmount] = useState("");
+  const [addingExpense, setAddingExpense] = useState(false);
+
+  const loadExpenses = useCallback(async () => {
+    try {
+      const { data } = await client.get("/api/expenses", { params: { date } });
+      setExpenses(Array.isArray(data) ? data : []);
+    } catch (err) {
+      // non-fatal
+    }
+  }, [date]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadExpenses();
+    }, [loadExpenses])
+  );
+
+  const addExpense = async () => {
+    if (!expenseDesc.trim()) {
+      Alert.alert("Missing description", "What was this expense for? e.g. Petrol, Milk");
+      return;
+    }
+    const amount = parseFloat(expenseAmount);
+    if (!amount || amount <= 0) {
+      Alert.alert("Invalid amount", "Enter a valid expense amount.");
+      return;
+    }
+    setAddingExpense(true);
+    try {
+      await client.post("/api/expenses", {
+        description: expenseDesc.trim(),
+        amount,
+        expenseDate: date,
+      });
+      setExpenseDesc("");
+      setExpenseAmount("");
+      await loadExpenses();
+      if (preview) loadPreview(); // keep the report in sync if it's already loaded
+    } catch (err) {
+      Alert.alert("Error", err.message);
+    } finally {
+      setAddingExpense(false);
+    }
+  };
 
   const loadPreview = async (invAmount) => {
     setLoading(true);
@@ -39,9 +89,7 @@ export default function ReportsScreen() {
   };
 
   const shortfall =
-    preview && preview.closingBalance < 0
-      ? Math.abs(preview.closingBalance)
-      : null;
+    preview && preview.closingBalance < 0 ? Math.abs(preview.closingBalance) : null;
 
   const applyShortfallAsInvestment = () => {
     if (!shortfall) return;
@@ -52,7 +100,7 @@ export default function ReportsScreen() {
   const closeDay = async () => {
     Alert.alert(
       "Close today's day?",
-      "This locks today's calculation and sets tomorrow's opening mun-irupu. This can't be casually undone.",
+      "This locks today's calculation and sets tomorrow's opening mun-irupu. This can't be casually undone.\n\n(Note: if you don't close manually, the day auto-closes on its own at 11:59 PM.)",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -77,6 +125,8 @@ export default function ReportsScreen() {
     );
   };
 
+  const expenseTotal = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: scaleWidth(16) }}>
       <Text style={styles.title}>Today's Report</Text>
@@ -86,8 +136,55 @@ export default function ReportsScreen() {
         <Text style={styles.explainText}>
           How this is calculated: (Yesterday's leftover) + (today's collection) + (today's
           aadhaiyam from new loans) + (any extra investment you add below) − (money given out
-          today) − (today's expenses) = tomorrow's opening balance.
+          today) − (today's expenses) = tomorrow's opening balance.{"\n\n"}
+          If you don't close the day manually, it auto-closes on its own at 11:59 PM using
+          whatever was recorded up to that point.
         </Text>
+      </View>
+
+      {/* Expenses - add as many as needed, one at a time */}
+      <View style={styles.expenseBox}>
+        <Text style={styles.sectionTitle}>Today's Expenses</Text>
+        <Text style={styles.expenseHint}>
+          Add each expense separately as it happens - petrol now, milk later, etc.
+        </Text>
+
+        {expenses.length > 0 && (
+          <View style={styles.expenseList}>
+            {expenses.map((e) => (
+              <View key={e.id} style={styles.expenseRow}>
+                <Text style={styles.expenseDescText}>{e.description}</Text>
+                <Text style={styles.expenseAmountText}>₹{e.amount}</Text>
+              </View>
+            ))}
+            <View style={styles.expenseDivider} />
+            <View style={styles.expenseRow}>
+              <Text style={styles.expenseTotalLabel}>Total Expenses</Text>
+              <Text style={styles.expenseTotalValue}>₹{expenseTotal}</Text>
+            </View>
+          </View>
+        )}
+
+        <TextInput
+          style={styles.input}
+          value={expenseDesc}
+          onChangeText={setExpenseDesc}
+          placeholder="What for? e.g. Petrol"
+          placeholderTextColor="#94A3B8"
+        />
+        <TextInput
+          style={styles.input}
+          value={expenseAmount}
+          onChangeText={setExpenseAmount}
+          placeholder="Amount e.g. 100"
+          placeholderTextColor="#94A3B8"
+          keyboardType="numeric"
+        />
+        <TouchableOpacity style={styles.addExpenseButton} onPress={addExpense} disabled={addingExpense}>
+          <Text style={styles.addExpenseButtonText}>
+            {addingExpense ? "Adding..." : "+ Add Expense"}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <TouchableOpacity style={styles.previewButton} onPress={() => loadPreview()} disabled={loading}>
@@ -139,10 +236,7 @@ export default function ReportsScreen() {
             placeholderTextColor="#94A3B8"
             keyboardType="numeric"
           />
-          <TouchableOpacity
-            style={styles.recalcButton}
-            onPress={() => loadPreview()}
-          >
+          <TouchableOpacity style={styles.recalcButton} onPress={() => loadPreview()}>
             <Text style={styles.recalcButtonText}>Recalculate with this investment</Text>
           </TouchableOpacity>
         </View>
@@ -165,13 +259,7 @@ function Row({ label, value, negative, bold }) {
   return (
     <View style={styles.row}>
       <Text style={styles.rowLabel}>{label}</Text>
-      <Text
-        style={[
-          styles.rowValue,
-          negative && styles.rowValueNegative,
-          bold && styles.rowValueBold,
-        ]}
-      >
+      <Text style={[styles.rowValue, negative && styles.rowValueNegative, bold && styles.rowValueBold]}>
         {negative ? "− " : ""}₹{value}
       </Text>
     </View>
@@ -182,58 +270,46 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0F172A" },
   title: { color: "#F8FAFC", fontSize: scaleFont(22), fontWeight: "700" },
   dateText: { color: "#94A3B8", fontSize: scaleFont(13), marginBottom: scaleHeight(12) },
-  explainBox: {
-    backgroundColor: "#1E293B",
-    borderRadius: 10,
-    padding: scaleWidth(12),
-    marginBottom: scaleHeight(14),
-  },
+  explainBox: { backgroundColor: "#1E293B", borderRadius: 10, padding: scaleWidth(12), marginBottom: scaleHeight(14) },
   explainText: { color: "#94A3B8", fontSize: scaleFont(12), lineHeight: scaleFont(18) },
-  previewButton: {
-    backgroundColor: "#2563EB",
+  sectionTitle: { color: "#F8FAFC", fontSize: scaleFont(15), fontWeight: "700", marginBottom: scaleHeight(4) },
+  expenseBox: { backgroundColor: "#1E293B", borderRadius: 14, padding: scaleWidth(16), marginBottom: scaleHeight(16) },
+  expenseHint: { color: "#94A3B8", fontSize: scaleFont(11), marginBottom: scaleHeight(10) },
+  expenseList: { marginBottom: scaleHeight(12) },
+  expenseRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: scaleHeight(4) },
+  expenseDescText: { color: "#CBD5E1", fontSize: scaleFont(13) },
+  expenseAmountText: { color: "#F87171", fontSize: scaleFont(13), fontWeight: "600" },
+  expenseDivider: { height: 1, backgroundColor: "#334155", marginVertical: scaleHeight(6) },
+  expenseTotalLabel: { color: "#F8FAFC", fontSize: scaleFont(13), fontWeight: "700" },
+  expenseTotalValue: { color: "#F87171", fontSize: scaleFont(14), fontWeight: "700" },
+  input: {
+    backgroundColor: "#0F172A",
     borderRadius: 10,
+    paddingHorizontal: scaleWidth(14),
     paddingVertical: scaleHeight(12),
-    alignItems: "center",
-    marginBottom: scaleHeight(16),
+    color: "#F8FAFC",
+    fontSize: scaleFont(14),
+    borderWidth: 1,
+    borderColor: "#334155",
+    marginBottom: scaleHeight(10),
   },
+  addExpenseButton: { backgroundColor: "#DC2626", borderRadius: 10, paddingVertical: scaleHeight(12), alignItems: "center" },
+  addExpenseButtonText: { color: "#fff", fontSize: scaleFont(13), fontWeight: "700" },
+  previewButton: { backgroundColor: "#2563EB", borderRadius: 10, paddingVertical: scaleHeight(12), alignItems: "center", marginBottom: scaleHeight(16) },
   previewButtonText: { color: "#fff", fontSize: scaleFont(14), fontWeight: "600" },
   card: { backgroundColor: "#1E293B", borderRadius: 14, padding: scaleWidth(16) },
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: scaleHeight(8),
-  },
+  row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: scaleHeight(8) },
   rowLabel: { color: "#94A3B8", fontSize: scaleFont(13), flex: 1 },
   rowValue: { color: "#F8FAFC", fontSize: scaleFont(14), fontWeight: "600" },
   rowValueNegative: { color: "#F87171" },
   rowValueBold: { fontSize: scaleFont(17), color: "#4ADE80" },
   divider: { height: 1, backgroundColor: "#334155", marginVertical: scaleHeight(8) },
-  statusText: {
-    color: "#94A3B8",
-    fontSize: scaleFont(12),
-    marginTop: scaleHeight(10),
-    textAlign: "center",
-  },
-  shortfallBox: {
-    backgroundColor: "#7C2D12",
-    borderRadius: 10,
-    padding: scaleWidth(12),
-    marginTop: scaleHeight(14),
-  },
+  statusText: { color: "#94A3B8", fontSize: scaleFont(12), marginTop: scaleHeight(10), textAlign: "center" },
+  shortfallBox: { backgroundColor: "#7C2D12", borderRadius: 10, padding: scaleWidth(12), marginTop: scaleHeight(14) },
   shortfallText: { color: "#FED7AA", fontSize: scaleFont(12), marginBottom: scaleHeight(10) },
-  shortfallButton: {
-    backgroundColor: "#EA580C",
-    borderRadius: 8,
-    paddingVertical: scaleHeight(10),
-    alignItems: "center",
-  },
+  shortfallButton: { backgroundColor: "#EA580C", borderRadius: 8, paddingVertical: scaleHeight(10), alignItems: "center" },
   shortfallButtonText: { color: "#fff", fontSize: scaleFont(13), fontWeight: "700" },
-  investmentBox: {
-    backgroundColor: "#1E293B",
-    borderRadius: 14,
-    padding: scaleWidth(16),
-    marginTop: scaleHeight(14),
-  },
+  investmentBox: { backgroundColor: "#1E293B", borderRadius: 14, padding: scaleWidth(16), marginTop: scaleHeight(14) },
   label: { color: "#CBD5E1", fontSize: scaleFont(13), marginBottom: scaleHeight(8) },
   investmentInput: {
     backgroundColor: "#0F172A",
@@ -246,20 +322,8 @@ const styles = StyleSheet.create({
     borderColor: "#334155",
     marginBottom: scaleHeight(12),
   },
-  recalcButton: {
-    backgroundColor: "#334155",
-    borderRadius: 10,
-    paddingVertical: scaleHeight(10),
-    alignItems: "center",
-  },
+  recalcButton: { backgroundColor: "#334155", borderRadius: 10, paddingVertical: scaleHeight(10), alignItems: "center" },
   recalcButtonText: { color: "#F8FAFC", fontSize: scaleFont(13), fontWeight: "600" },
-  closeButton: {
-    backgroundColor: "#DC2626",
-    borderRadius: 10,
-    paddingVertical: scaleHeight(14),
-    alignItems: "center",
-    marginTop: scaleHeight(20),
-    marginBottom: scaleHeight(30),
-  },
+  closeButton: { backgroundColor: "#DC2626", borderRadius: 10, paddingVertical: scaleHeight(14), alignItems: "center", marginTop: scaleHeight(20), marginBottom: scaleHeight(30) },
   closeButtonText: { color: "#fff", fontSize: scaleFont(15), fontWeight: "700" },
 });

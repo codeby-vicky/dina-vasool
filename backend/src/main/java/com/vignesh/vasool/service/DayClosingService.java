@@ -8,6 +8,7 @@ import com.vignesh.vasool.repository.DayClosingRepository;
 import com.vignesh.vasool.repository.ExpenseRepository;
 import com.vignesh.vasool.repository.LoanPhaseRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -163,5 +164,21 @@ public class DayClosingService {
         BigDecimal totalExpenses;
         BigDecimal additionalInvestment;
         BigDecimal closingBalance;
+    }
+
+    /**
+     * Runs every day at 23:59 IST. If the day hasn't been manually closed by
+     * then, closes it automatically so tomorrow's mun-irupu carries forward
+     * correctly without anyone having to remember to tap "Close Today's Day" -
+     * this is exactly the same calculation closeDay() does, just triggered by
+     * the clock instead of a button.
+     */
+    @Scheduled(cron = "0 59 23 * * *", zone = "Asia/Kolkata")
+    public void autoCloseDayIfNeeded() {
+        LocalDate today = LocalDate.now();
+        if (dayClosingRepository.findByClosingDate(today).isPresent()) {
+            return; // already closed manually today
+        }
+        closeDay(today, null);
     }
 }

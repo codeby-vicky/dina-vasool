@@ -2,6 +2,7 @@ package com.vignesh.vasool.controller;
 
 import com.vignesh.vasool.dto.LoginRequest;
 import com.vignesh.vasool.dto.LoginResponse;
+import com.vignesh.vasool.dto.SignupRequest;
 import com.vignesh.vasool.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -17,5 +18,10 @@ public class AuthController {
     @PostMapping("/login")
     public LoginResponse login(@Valid @RequestBody LoginRequest request) {
         return authService.login(request);
+    }
+
+    @PostMapping("/signup")
+    public LoginResponse signup(@Valid @RequestBody SignupRequest request) {
+        return authService.signup(request);
     }
 }

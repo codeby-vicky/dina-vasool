@@ -23,6 +23,12 @@ public interface LoanPhaseRepository extends JpaRepository<LoanPhase, Long> {
     @Query("select p from LoanPhase p join fetch p.customer where p.status in :statuses")
     List<LoanPhase> findByStatusInWithCustomer(@Param("statuses") List<LoanPhase.PhaseStatus> statuses);
 
+    /** Same as findByCustomerIdAndStatusIn but eagerly loads category - fixes the
+     *  category name showing blank in "Today's Payments (by category)" and the
+     *  loan phase cards, same root cause as the other lazy-loading fixes. */
+    @Query("select p from LoanPhase p join fetch p.category where p.customer.id = :customerId and p.status in :statuses")
+    List<LoanPhase> findByCustomerIdAndStatusInWithCategory(@Param("customerId") Long customerId, @Param("statuses") List<LoanPhase.PhaseStatus> statuses);
+
     @Modifying
     @Query("delete from LoanPhase p where p.customer.id = :customerId")
     void deleteByCustomerId(@Param("customerId") Long customerId);
