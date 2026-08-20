@@ -87,7 +87,7 @@ export default function LoginScreen({ navigation }) {
           </TouchableOpacity>
 
           <TouchableOpacity onPress={() => navigation.navigate("Signup")} style={{ marginTop: scaleHeight(18) }}>
-            <Text style={styles.signupLink}>Starting a new daily collection business? Sign Up</Text>
+            <Text style={styles.signupLink}>New daily collection business? Sign Up</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
