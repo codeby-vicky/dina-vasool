@@ -67,9 +67,7 @@ export default function CustomersScreen({ navigation }) {
       });
       setStatusMap(map);
     } catch (err) {
-      // Temporary: surface the error so we can diagnose why dots aren't showing.
-      // Remove this Alert once confirmed working.
-      Alert.alert("Status dots failed to load", err.message);
+      // status labels are a nice-to-have - don't block the list on failure
     }
   }, []);
 
@@ -191,7 +189,11 @@ export default function CustomersScreen({ navigation }) {
               >
                 <View style={styles.customerTopRow}>
                   {!!status && (
-                    <View style={[styles.dot, status === "paid" ? styles.dotPaid : styles.dotUnpaid]} />
+                    <View style={[styles.statusLabel, status === "paid" ? styles.labelPaid : styles.labelUnpaid]}>
+                      <Text style={styles.statusLabelText}>
+                        {status === "paid" ? "PAID" : "NOT PAID"}
+                      </Text>
+                    </View>
                   )}
                   <Text style={styles.customerName}>{item.name}</Text>
                 </View>
@@ -267,6 +269,10 @@ const styles = StyleSheet.create({
   dot: { width: scaleWidth(10), height: scaleWidth(10), borderRadius: scaleWidth(5) },
   dotPaid: { backgroundColor: "#22C55E" },
   dotUnpaid: { backgroundColor: "#EF4444" },
+  statusLabel: { paddingHorizontal: scaleWidth(6), paddingVertical: scaleHeight(2), borderRadius: 4 },
+  labelPaid: { backgroundColor: "#166534" },
+  labelUnpaid: { backgroundColor: "#7F1D1D" },
+  statusLabelText: { color: "#fff", fontSize: scaleFont(9), fontWeight: "700" },
   customerCard: {
     backgroundColor: "#1E293B",
     borderRadius: 12,

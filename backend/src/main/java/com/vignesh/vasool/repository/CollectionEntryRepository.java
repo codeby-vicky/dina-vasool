@@ -14,7 +14,19 @@ public interface CollectionEntryRepository extends JpaRepository<CollectionEntry
 
     List<CollectionEntry> findByCollectedDate(LocalDate date);
 
+    /** Same as findByCollectedDate but eagerly loads loanPhase - needed because
+     *  loanPhase is lazy-fetched by default and was silently coming back null
+     *  in JSON responses, breaking the paid/unpaid status logic. */
+    @Query("select c from CollectionEntry c join fetch c.loanPhase where c.collectedDate = :date")
+    List<CollectionEntry> findByCollectedDateWithPhase(@Param("date") LocalDate date);
+
     List<CollectionEntry> findByCollectedDateBetween(LocalDate start, LocalDate end);
+
+    /** Same as findByCollectedDateBetween but eagerly loads loanPhase - needed for the
+     *  same reason as findByCollectedDateWithPhase: without it, loanPhase silently
+     *  comes back null in JSON, breaking the CSV export's day-by-day columns. */
+    @Query("select c from CollectionEntry c join fetch c.loanPhase where c.collectedDate between :start and :end")
+    List<CollectionEntry> findByCollectedDateBetweenWithPhase(@Param("start") LocalDate start, @Param("end") LocalDate end);
 
     List<CollectionEntry> findByLoanPhaseId(Long loanPhaseId);
 

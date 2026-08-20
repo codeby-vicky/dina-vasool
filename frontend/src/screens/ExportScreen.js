@@ -117,7 +117,10 @@ async function buildAndShareCsv(start, end, title, customerId) {
     lines.push(row.map(csvCell).join(","));
   });
 
-  const csvContent = lines.join("\n");
+  // UTF-8 BOM prefix - without this, Excel (unlike Google Sheets) misreads the
+  // file's encoding and garbles Tamil text, emoji, and other non-English characters.
+  const BOM = "\uFEFF";
+  const csvContent = BOM + lines.join("\n");
   const fileName = `${title.replace(/\s+/g, "_")}_${start}_to_${end}.csv`;
   const fileUri = FileSystem.documentDirectory + fileName;
 

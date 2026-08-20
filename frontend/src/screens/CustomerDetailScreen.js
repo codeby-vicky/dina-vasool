@@ -55,6 +55,7 @@ export default function CustomerDetailScreen({ route, navigation }) {
   const { customer } = route.params;
   const [phases, setPhases] = useState([]);
   const [allPhases, setAllPhases] = useState([]);
+  const [todayPayments, setTodayPayments] = useState({}); // loanPhaseId -> amount collected today
   const [loading, setLoading] = useState(true);
   const [collectAmount, setCollectAmount] = useState("");
   const [selectedPhase, setSelectedPhase] = useState(null);
@@ -75,8 +76,10 @@ export default function CustomerDetailScreen({ route, navigation }) {
         client.get(`/api/loan-phases/customer/${customer.id}/active`),
         client.get(`/api/loan-phases/customer/${customer.id}/all`),
       ]);
-      setPhases(Array.isArray(activeRes.data) ? activeRes.data : []);
+      const activePhases = Array.isArray(activeRes.data) ? activeRes.data : [];
+      setPhases(activePhases);
       setAllPhases(Array.isArray(allRes.data) ? allRes.data : []);
+      loadTodayPayments(activePhases);
     } catch (err) {
       setPhases([]);
       setAllPhases([]);
@@ -85,6 +88,26 @@ export default function CustomerDetailScreen({ route, navigation }) {
       setLoading(false);
     }
   }, [customer.id]);
+
+  // Shows each active category's payment status for TODAY separately -
+  // e.g. Category A paid 200, Category B not paid - at a glance.
+  const loadTodayPayments = useCallback(async (activePhases) => {
+    try {
+      const todayIso = new Date().toISOString().slice(0, 10);
+      const { data } = await client.get("/api/collections", { params: { date: todayIso } });
+      const phaseIds = new Set(activePhases.map((p) => p.id));
+      const map = {};
+      (data || []).forEach((entry) => {
+        const pid = entry.loanPhase?.id;
+        if (pid && phaseIds.has(pid)) {
+          map[pid] = (map[pid] || 0) + Number(entry.amount);
+        }
+      });
+      setTodayPayments(map);
+    } catch (err) {
+      // non-fatal - this section is a nice-to-have summary
+    }
+  }, []);
 
   const loadCategories = useCallback(async () => {
     try {
@@ -281,6 +304,23 @@ export default function CustomerDetailScreen({ route, navigation }) {
       )}
 
       <Text style={styles.sectionTitle}>Active Loan Phases</Text>
+
+      {phases.length > 0 && (
+        <View style={styles.todaySummaryBox}>
+          <Text style={styles.todaySummaryTitle}>Today's Payments (by category)</Text>
+          {phases.map((phase) => {
+            const paid = todayPayments[phase.id];
+            return (
+              <View key={phase.id} style={styles.todaySummaryRow}>
+                <Text style={styles.todaySummaryLabel}>{phase.category?.name || "Category"}</Text>
+                <View style={[styles.statusLabel, paid ? styles.labelPaid : styles.labelUnpaid]}>
+                  <Text style={styles.statusLabelText}>{paid ? `₹${paid}` : "NOT PAID"}</Text>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      )}
 
       {loading ? (
         <ActivityIndicator color="#2563EB" style={{ marginTop: scaleHeight(20) }} />
@@ -588,6 +628,24 @@ const styles = StyleSheet.create({
   phaseTitle: { color: "#F8FAFC", fontSize: scaleFont(14), fontWeight: "700", flex: 1 },
   statusBadge: { color: "#16A34A", fontSize: scaleFont(11), fontWeight: "700" },
   statusOverdue: { color: "#DC2626" },
+  statusLabel: { paddingHorizontal: scaleWidth(6), paddingVertical: scaleHeight(2), borderRadius: 4 },
+  labelPaid: { backgroundColor: "#166534" },
+  labelUnpaid: { backgroundColor: "#7F1D1D" },
+  statusLabelText: { color: "#fff", fontSize: scaleFont(9), fontWeight: "700" },
+  todaySummaryBox: {
+    backgroundColor: "#1E293B",
+    borderRadius: 12,
+    padding: scaleWidth(14),
+    marginBottom: scaleHeight(14),
+  },
+  todaySummaryTitle: { color: "#F8FAFC", fontSize: scaleFont(13), fontWeight: "700", marginBottom: scaleHeight(8) },
+  todaySummaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: scaleHeight(4),
+  },
+  todaySummaryLabel: { color: "#CBD5E1", fontSize: scaleFont(12) },
   simpleGrid: { flexDirection: "row", flexWrap: "wrap" },
   simpleCell: { width: "50%", marginBottom: scaleHeight(8) },
   simpleLabel: { color: "#94A3B8", fontSize: scaleFont(11) },

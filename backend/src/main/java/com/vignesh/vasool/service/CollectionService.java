@@ -70,7 +70,7 @@ public class CollectionService {
     }
 
     public List<CollectionEntry> getByDate(LocalDate date) {
-        return collectionEntryRepository.findByCollectedDate(date);
+        return collectionEntryRepository.findByCollectedDateWithPhase(date);
     }
 
     public BigDecimal getTotalForDate(LocalDate date) {
@@ -82,6 +82,6 @@ public class CollectionService {
     }
 
     public List<CollectionEntry> getByRange(LocalDate start, LocalDate end) {
-        return collectionEntryRepository.findByCollectedDateBetween(start, end);
+        return collectionEntryRepository.findByCollectedDateBetweenWithPhase(start, end);
     }
 }
