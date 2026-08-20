@@ -50,8 +50,10 @@ function RootNavigator() {
     <NavigationContainer theme={navTheme}>
       <Stack.Navigator>
         {!user ? (
-          <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
-          <Stack.Screen name="Signup" component={SignupScreen} options={{ headerShown: false }} />
+          <>
+            <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Signup" component={SignupScreen} options={{ headerShown: false }} />
+          </>
         ) : (
           <>
             <Stack.Screen
