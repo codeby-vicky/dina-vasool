@@ -29,10 +29,13 @@ function calcPreview(adapu, category) {
   };
 }
 
-export default function AddCustomerScreen({ navigation }) {
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [address, setAddress] = useState("");
+export default function AddCustomerScreen({ navigation, route }) {
+  const editingCustomer = route?.params?.customer || null;
+  const isEditMode = !!editingCustomer;
+
+  const [name, setName] = useState(editingCustomer?.name || "");
+  const [phone, setPhone] = useState(editingCustomer?.phone || "");
+  const [address, setAddress] = useState(editingCustomer?.address || "");
   const [saving, setSaving] = useState(false);
   const [longWait, setLongWait] = useState(false);
   const [pickerVisible, setPickerVisible] = useState(false);
@@ -65,6 +68,28 @@ export default function AddCustomerScreen({ navigation }) {
       Alert.alert("Missing name", "Customer name is required (phone number is optional).");
       return;
     }
+
+    // Edit mode: just update this customer's details, never create a new one,
+    // never touches their loan phases or collection history.
+    if (isEditMode) {
+      setSaving(true);
+      try {
+        await client.put(`/api/customers/${editingCustomer.id}`, {
+          name: name.trim(),
+          phone: phone.trim() || undefined,
+          address: address.trim() || undefined,
+        });
+        Alert.alert("Updated", `${name}'s details saved.`, [
+          { text: "OK", onPress: () => navigation.goBack() },
+        ]);
+      } catch (err) {
+        Alert.alert("Error", err.message);
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
     if (alsoDisburse) {
       const amount = parseFloat(adapuAmount);
       if (!amount || amount <= 0) {
@@ -158,13 +183,16 @@ export default function AddCustomerScreen({ navigation }) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: scaleWidth(16) }}>
-      <Text style={styles.title}>Add Customer</Text>
+      <Text style={styles.title}>{isEditMode ? `Edit ${editingCustomer.name}` : "Add Customer"}</Text>
 
-      <TouchableOpacity style={styles.pickButton} onPress={openContactPicker}>
-        <Text style={styles.pickButtonText}>📇 Pick from Phone Contacts</Text>
-      </TouchableOpacity>
-
-      <Text style={styles.orText}>— or enter manually —</Text>
+      {!isEditMode && (
+        <>
+          <TouchableOpacity style={styles.pickButton} onPress={openContactPicker}>
+            <Text style={styles.pickButtonText}>📇 Pick from Phone Contacts</Text>
+          </TouchableOpacity>
+          <Text style={styles.orText}>— or enter manually —</Text>
+        </>
+      )}
 
       <Text style={styles.label}>Name</Text>
       <TextInput
@@ -194,18 +222,22 @@ export default function AddCustomerScreen({ navigation }) {
         placeholderTextColor="#94A3B8"
       />
 
-      <TouchableOpacity style={styles.saveContactButton} onPress={saveToPhoneContacts}>
-        <Text style={styles.saveContactButtonText}>📱 Save to Phone Contacts (optional)</Text>
-      </TouchableOpacity>
+      {!isEditMode && (
+        <TouchableOpacity style={styles.saveContactButton} onPress={saveToPhoneContacts}>
+          <Text style={styles.saveContactButtonText}>📱 Save to Phone Contacts (optional)</Text>
+        </TouchableOpacity>
+      )}
 
-      <View style={styles.disburseToggleRow}>
-        <Text style={styles.disburseToggleLabel}>Also give a loan now?</Text>
-        <Switch
-          value={alsoDisburse}
-          onValueChange={setAlsoDisburse}
-          trackColor={{ false: "#334155", true: "#2563EB" }}
-        />
-      </View>
+      {!isEditMode && (
+        <View style={styles.disburseToggleRow}>
+          <Text style={styles.disburseToggleLabel}>Also give a loan now?</Text>
+          <Switch
+            value={alsoDisburse}
+            onValueChange={setAlsoDisburse}
+            trackColor={{ false: "#334155", true: "#2563EB" }}
+          />
+        </View>
+      )}
 
       {alsoDisburse && (
         <View style={styles.disburseBox}>
@@ -279,6 +311,8 @@ export default function AddCustomerScreen({ navigation }) {
             ? longWait
               ? "Still working — server waking up, please wait..."
               : "Saving..."
+            : isEditMode
+            ? "Save Changes"
             : alsoDisburse
             ? "Add Customer & Disburse"
             : "Add Customer"}

@@ -208,6 +208,12 @@ export default function CustomersScreen({ navigation }) {
                     </View>
                   )}
                   <Text style={styles.customerName}>{item.name}</Text>
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate("AddCustomer", { customer: item })}
+                    style={styles.editButton}
+                  >
+                    <Text style={styles.editButtonText}>✏️ Edit</Text>
+                  </TouchableOpacity>
                 </View>
                 {!!item.phone && <Text style={styles.customerPhone}>{item.phone}</Text>}
                 {!!item.address && <Text style={styles.customerArea}>📍 {item.address}</Text>}
@@ -293,6 +299,8 @@ const styles = StyleSheet.create({
     marginBottom: scaleHeight(10),
   },
   customerTopRow: { flexDirection: "row", alignItems: "center", gap: scaleWidth(8) },
+  editButton: { marginLeft: "auto" },
+  editButtonText: { color: "#60A5FA", fontSize: scaleFont(12) },
   customerName: { color: "#F8FAFC", fontSize: scaleFont(16), fontWeight: "600" },
   customerPhone: { color: "#94A3B8", fontSize: scaleFont(13), marginTop: scaleHeight(4) },
   customerArea: { color: "#60A5FA", fontSize: scaleFont(12), marginTop: scaleHeight(2) },

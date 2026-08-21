@@ -53,6 +53,16 @@ public class CustomerService {
         return customerRepository.findAll();
     }
 
+    /** Updates name/phone/area on an existing customer only - never touches
+     *  their loan phases or collection history, and never creates a new row. */
+    public Customer update(Long id, CustomerRequest request) {
+        Customer customer = getById(id);
+        customer.setName(request.getName());
+        customer.setPhone(request.getPhone());
+        customer.setAddress(request.getAddress());
+        return customerRepository.save(customer);
+    }
+
     /**
      * Deletes a customer and everything tied to them (collection history,
      * loan phases). Used for the "accidentally added" cleanup case.
