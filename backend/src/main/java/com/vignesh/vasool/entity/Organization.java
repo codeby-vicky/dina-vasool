@@ -6,37 +6,26 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+/** One separate "daily vasool" business/tenant. Every signup creates a new one,
+ *  and every collector an admin creates belongs to that same admin's organization.
+ *  All customers/categories/loans/collections/expenses/day-closings are scoped
+ *  to a single organization so different businesses never see each other's data. */
 @Entity
-@Table(name = "expenses")
+@Table(name = "organizations")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Expense {
+public class Organization {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @Column(nullable = false)
-    private LocalDate expenseDate;
-
-    @Column(nullable = false, precision = 12, scale = 2)
-    private BigDecimal amount;
-
-    @Column(nullable = false)
-    private String description; // e.g. "petrol", "milk"
-
-    @Column(nullable = false)
-    private Long organizationOwnerId; // e.g. "petrol", "milk"
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "recorded_by", nullable = false)
-    private User recordedBy;
+    private String name;
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;

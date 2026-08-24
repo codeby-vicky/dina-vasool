@@ -43,6 +43,11 @@ public class User {
     @Column(nullable = false)
     private boolean active;
 
+    // The admin user id that owns this data's organization/business.
+    // For an admin, this equals their own id (self). For a collector, it's
+    // set to whichever admin created them - ties them to the same business.
+    private Long organizationOwnerId;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

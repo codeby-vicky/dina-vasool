@@ -20,7 +20,7 @@ import java.time.LocalDateTime;
  * corrections require an explicit reopen via the admin.
  */
 @Entity
-@Table(name = "day_closings", uniqueConstraints = @UniqueConstraint(columnNames = "closingDate"))
+@Table(name = "day_closings", uniqueConstraints = @UniqueConstraint(columnNames = {"closingDate", "organizationOwnerId"}))
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -31,8 +31,11 @@ public class DayClosing {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private LocalDate closingDate;
+
+    @Column(nullable = false)
+    private Long organizationOwnerId;
 
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal openingBalance; // mun-irupu carried from previous day

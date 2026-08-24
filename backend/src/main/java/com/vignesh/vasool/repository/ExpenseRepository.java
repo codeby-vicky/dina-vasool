@@ -10,8 +10,8 @@ import java.time.LocalDate;
 import java.util.List;
 
 public interface ExpenseRepository extends JpaRepository<Expense, Long> {
-    List<Expense> findByExpenseDate(LocalDate date);
+    List<Expense> findByExpenseDateAndOrganizationOwnerId(LocalDate date, Long organizationOwnerId);
 
-    @Query("select coalesce(sum(e.amount), 0) from Expense e where e.expenseDate = :date")
-    BigDecimal sumAmountByDate(@Param("date") LocalDate date);
+    @Query("select coalesce(sum(e.amount), 0) from Expense e where e.expenseDate = :date and e.organizationOwnerId = :orgId")
+    BigDecimal sumAmountByDate(@Param("date") LocalDate date, @Param("orgId") Long organizationOwnerId);
 }

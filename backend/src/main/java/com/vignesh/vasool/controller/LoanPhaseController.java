@@ -35,8 +35,8 @@ public class LoanPhaseController {
     }
 
     @GetMapping("/all-active")
-    public List<LoanPhase> getAllActive() {
-        return loanPhaseService.getAllActiveAndOverduePhases();
+    public List<LoanPhase> getAllActive(@AuthenticationPrincipal User currentUser) {
+        return loanPhaseService.getAllActiveAndOverduePhases(currentUser.getOrganizationOwnerId());
     }
 
     @GetMapping("/{id}")

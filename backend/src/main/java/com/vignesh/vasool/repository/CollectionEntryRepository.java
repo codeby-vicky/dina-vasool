@@ -12,25 +12,13 @@ import java.util.List;
 
 public interface CollectionEntryRepository extends JpaRepository<CollectionEntry, Long> {
 
-    List<CollectionEntry> findByCollectedDate(LocalDate date);
+    @Query("select c from CollectionEntry c join fetch c.loanPhase where c.collectedDate = :date and c.organizationOwnerId = :orgId")
+    List<CollectionEntry> findByCollectedDateWithPhase(@Param("date") LocalDate date, @Param("orgId") Long organizationOwnerId);
 
-    /** Same as findByCollectedDate but eagerly loads loanPhase - needed because
-     *  loanPhase is lazy-fetched by default and was silently coming back null
-     *  in JSON responses, breaking the paid/unpaid status logic. */
-    @Query("select c from CollectionEntry c join fetch c.loanPhase where c.collectedDate = :date")
-    List<CollectionEntry> findByCollectedDateWithPhase(@Param("date") LocalDate date);
-
-    List<CollectionEntry> findByCollectedDateBetween(LocalDate start, LocalDate end);
-
-    /** Same as findByCollectedDateBetween but eagerly loads loanPhase - needed for the
-     *  same reason as findByCollectedDateWithPhase: without it, loanPhase silently
-     *  comes back null in JSON, breaking the CSV export's day-by-day columns. */
-    @Query("select c from CollectionEntry c join fetch c.loanPhase where c.collectedDate between :start and :end")
-    List<CollectionEntry> findByCollectedDateBetweenWithPhase(@Param("start") LocalDate start, @Param("end") LocalDate end);
+    @Query("select c from CollectionEntry c join fetch c.loanPhase where c.collectedDate between :start and :end and c.organizationOwnerId = :orgId")
+    List<CollectionEntry> findByCollectedDateBetweenWithPhase(@Param("start") LocalDate start, @Param("end") LocalDate end, @Param("orgId") Long organizationOwnerId);
 
     List<CollectionEntry> findByLoanPhaseId(Long loanPhaseId);
-
-    List<CollectionEntry> findByLoanPhaseIdOrderByCollectedDateDesc(Long loanPhaseId);
 
     java.util.Optional<CollectionEntry> findByLoanPhaseIdAndCollectedDate(Long loanPhaseId, LocalDate collectedDate);
 
@@ -42,12 +30,9 @@ public interface CollectionEntryRepository extends JpaRepository<CollectionEntry
     @Query("delete from CollectionEntry c where c.loanPhase.customer.id = :customerId")
     void deleteByCustomerId(@Param("customerId") Long customerId);
 
-    @Query("select coalesce(sum(c.amount), 0) from CollectionEntry c where c.collectedDate = :date")
-    BigDecimal sumAmountByDate(@Param("date") LocalDate date);
+    @Query("select coalesce(sum(c.amount), 0) from CollectionEntry c where c.collectedDate = :date and c.organizationOwnerId = :orgId")
+    BigDecimal sumAmountByDate(@Param("date") LocalDate date, @Param("orgId") Long organizationOwnerId);
 
     @Query("select coalesce(sum(c.amount), 0) from CollectionEntry c where c.loanPhase.id = :loanPhaseId")
     BigDecimal sumAmountByLoanPhase(@Param("loanPhaseId") Long loanPhaseId);
-
-    @Query("select coalesce(sum(c.amount), 0) from CollectionEntry c where c.collectedDate = :date and c.collectedBy.id = :userId")
-    BigDecimal sumAmountByDateAndCollector(@Param("date") LocalDate date, @Param("userId") Long userId);
 }

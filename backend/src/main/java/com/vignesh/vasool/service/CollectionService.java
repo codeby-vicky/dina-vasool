@@ -13,11 +13,6 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
-/**
- * Records a day's payment against a customer's active loan phase.
- * Amount is fully dynamic - any value the customer actually hands over.
- * Auto-closes the phase once the running total collected meets/exceeds totalPayable.
- */
 @Service
 @RequiredArgsConstructor
 public class CollectionService {
@@ -25,11 +20,6 @@ public class CollectionService {
     private final CollectionEntryRepository collectionEntryRepository;
     private final LoanPhaseRepository loanPhaseRepository;
 
-    /**
-     * Records (or replaces) a day's payment. If an entry already exists for this
-     * loan phase on this exact date, it's REPLACED with the new amount (not duplicated) -
-     * covers correcting today's collection. A different date always creates a new entry.
-     */
     public CollectionEntry record(CollectionRequest request, User collectedBy) {
         LoanPhase phase = loanPhaseRepository.findById(request.getLoanPhaseId())
                 .orElseThrow(() -> new IllegalArgumentException("Loan phase not found: " + request.getLoanPhaseId()));
@@ -45,6 +35,7 @@ public class CollectionService {
                 .orElseGet(() -> CollectionEntry.builder()
                         .loanPhase(phase)
                         .collectedDate(date)
+                        .organizationOwnerId(collectedBy.getOrganizationOwnerId())
                         .build());
 
         entry.setAmount(request.getAmount());
@@ -53,7 +44,6 @@ public class CollectionService {
 
         CollectionEntry saved = collectionEntryRepository.save(entry);
 
-        // Auto-close the phase if fully repaid
         BigDecimal totalCollected = collectionEntryRepository.sumAmountByLoanPhase(phase.getId());
         if (totalCollected.compareTo(phase.getTotalPayable()) >= 0
                 && phase.getStatus() != LoanPhase.PhaseStatus.CLOSED) {
@@ -69,19 +59,19 @@ public class CollectionService {
         return phase.getTotalPayable().subtract(collected);
     }
 
-    public List<CollectionEntry> getByDate(LocalDate date) {
-        return collectionEntryRepository.findByCollectedDateWithPhase(date);
+    public List<CollectionEntry> getByDate(LocalDate date, Long orgId) {
+        return collectionEntryRepository.findByCollectedDateWithPhase(date, orgId);
     }
 
-    public BigDecimal getTotalForDate(LocalDate date) {
-        return collectionEntryRepository.sumAmountByDate(date);
+    public BigDecimal getTotalForDate(LocalDate date, Long orgId) {
+        return collectionEntryRepository.sumAmountByDate(date, orgId);
     }
 
     public List<CollectionEntry> getHistoryForPhase(Long loanPhaseId) {
         return collectionEntryRepository.findByLoanPhaseId(loanPhaseId);
     }
 
-    public List<CollectionEntry> getByRange(LocalDate start, LocalDate end) {
-        return collectionEntryRepository.findByCollectedDateBetweenWithPhase(start, end);
+    public List<CollectionEntry> getByRange(LocalDate start, LocalDate end, Long orgId) {
+        return collectionEntryRepository.findByCollectedDateBetweenWithPhase(start, end, orgId);
     }
 }

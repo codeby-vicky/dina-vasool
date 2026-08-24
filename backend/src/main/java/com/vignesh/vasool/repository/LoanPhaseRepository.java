@@ -11,21 +11,14 @@ import java.util.List;
 
 public interface LoanPhaseRepository extends JpaRepository<LoanPhase, Long> {
     List<LoanPhase> findByCustomerIdAndStatusIn(Long customerId, List<LoanPhase.PhaseStatus> statuses);
-    List<LoanPhase> findByStartDate(LocalDate date);
-    List<LoanPhase> findByStatus(LoanPhase.PhaseStatus status);
-    List<LoanPhase> findByStatusIn(List<LoanPhase.PhaseStatus> statuses);
+    List<LoanPhase> findByStartDateAndOrganizationOwnerId(LocalDate date, Long organizationOwnerId);
     List<LoanPhase> findByCustomerId(Long customerId);
     int countByCustomerIdAndCategoryId(Long customerId, Long categoryId);
+    List<LoanPhase> findByStatusAndOrganizationOwnerId(LoanPhase.PhaseStatus status, Long organizationOwnerId);
 
-    /** Same as findByStatusIn but forces the customer relationship to load eagerly -
-     *  needed because customer is lazy-fetched by default and was silently coming
-     *  back null in JSON responses, breaking the paid/unpaid status dots. */
-    @Query("select p from LoanPhase p join fetch p.customer where p.status in :statuses")
-    List<LoanPhase> findByStatusInWithCustomer(@Param("statuses") List<LoanPhase.PhaseStatus> statuses);
+    @Query("select p from LoanPhase p join fetch p.customer where p.status in :statuses and p.organizationOwnerId = :orgId")
+    List<LoanPhase> findByStatusInWithCustomer(@Param("statuses") List<LoanPhase.PhaseStatus> statuses, @Param("orgId") Long organizationOwnerId);
 
-    /** Same as findByCustomerIdAndStatusIn but eagerly loads category - fixes the
-     *  category name showing blank in "Today's Payments (by category)" and the
-     *  loan phase cards, same root cause as the other lazy-loading fixes. */
     @Query("select p from LoanPhase p join fetch p.category where p.customer.id = :customerId and p.status in :statuses")
     List<LoanPhase> findByCustomerIdAndStatusInWithCategory(@Param("customerId") Long customerId, @Param("statuses") List<LoanPhase.PhaseStatus> statuses);
 

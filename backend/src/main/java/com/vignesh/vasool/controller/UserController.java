@@ -5,15 +5,13 @@ import com.vignesh.vasool.entity.User;
 import com.vignesh.vasool.repository.UserRepository;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-/**
- * Admin-only: create and manage the 2-3 staff logins.
- * Locked down to ROLE_ADMIN via SecurityConfig's "/api/admin/**" rule.
- */
+/** Admin-only: create collector logins that belong to the SAME business/org as the creating admin. */
 @RestController
 @RequestMapping("/api/admin/users")
 @RequiredArgsConstructor
@@ -23,7 +21,7 @@ public class UserController {
     private final PasswordEncoder passwordEncoder;
 
     @PostMapping
-    public User create(@Valid @RequestBody CreateUserRequest request) {
+    public User create(@Valid @RequestBody CreateUserRequest request, @AuthenticationPrincipal User currentUser) {
         if (userRepository.existsByUsername(request.getUsername())) {
             throw new IllegalArgumentException("Username already taken: " + request.getUsername());
         }
@@ -34,12 +32,13 @@ public class UserController {
                 .phone(request.getPhone())
                 .role(request.getRole() != null ? User.Role.valueOf(request.getRole()) : User.Role.COLLECTOR)
                 .active(true)
+                .organizationOwnerId(currentUser.getOrganizationOwnerId())
                 .build();
         return userRepository.save(user);
     }
 
     @GetMapping
-    public List<User> getAll() {
-        return userRepository.findAll();
+    public List<User> getAll(@AuthenticationPrincipal User currentUser) {
+        return userRepository.findByOrganizationOwnerId(currentUser.getOrganizationOwnerId());
     }
 }

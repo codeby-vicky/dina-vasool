@@ -7,15 +7,6 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
-/**
- * Bootstraps a default admin account on first run only, since the
- * /api/admin/users endpoint that creates staff logins is itself
- * locked to ROLE_ADMIN - something has to create the first one.
- *
- * IMPORTANT: change this password immediately after first login,
- * then consider deleting/disabling this class or gating it behind
- * a property so it doesn't run in production every startup.
- */
 @Component
 @RequiredArgsConstructor
 public class DataInitializer implements CommandLineRunner {
@@ -34,6 +25,8 @@ public class DataInitializer implements CommandLineRunner {
                     .role(User.Role.ADMIN)
                     .active(true)
                     .build();
+            admin = userRepository.save(admin);
+            admin.setOrganizationOwnerId(admin.getId());
             userRepository.save(admin);
             System.out.println("Default admin created -> username: admin / password: ChangeMe123! (CHANGE THIS)");
         }

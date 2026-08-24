@@ -57,7 +57,10 @@ public class LoanPhase {
 
     @Column(nullable = false)
     @Builder.Default
-    private Integer phaseNumber = 1; // 1 = first loan for this customer+category, 2 = second time borrowing, etc.
+    private Integer phaseNumber = 1;
+
+    @Column(nullable = false)
+    private Long organizationOwnerId; // 1 = first loan for this customer+category, 2 = second time borrowing, etc.
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

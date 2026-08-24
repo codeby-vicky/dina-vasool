@@ -32,13 +32,15 @@ public class CollectionController {
     }
 
     @GetMapping
-    public List<CollectionEntry> getByDate(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        return collectionService.getByDate(date);
+    public List<CollectionEntry> getByDate(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+                                            @AuthenticationPrincipal User currentUser) {
+        return collectionService.getByDate(date, currentUser.getOrganizationOwnerId());
     }
 
     @GetMapping("/total")
-    public Map<String, Object> getTotalForDate(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        BigDecimal total = collectionService.getTotalForDate(date);
+    public Map<String, Object> getTotalForDate(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+                                                @AuthenticationPrincipal User currentUser) {
+        BigDecimal total = collectionService.getTotalForDate(date, currentUser.getOrganizationOwnerId());
         return Map.of("date", date, "totalCollection", total);
     }
 
@@ -47,8 +49,6 @@ public class CollectionController {
         return collectionService.getHistoryForPhase(loanPhaseId);
     }
 
-    /** Checks whether today's (or a given date's) collection already exists for this phase,
-     *  so the app can warn "you're about to replace ₹X" before overwriting it. */
     @GetMapping("/loan-phase/{loanPhaseId}/for-date")
     public CollectionEntry getForDate(
             @PathVariable Long loanPhaseId,
@@ -59,19 +59,14 @@ public class CollectionController {
                 .orElse(null);
     }
 
-    /** All collections within a date range - powers the Excel export (daily/monthly ledger). */
     @GetMapping("/range")
     public List<CollectionEntry> getByRange(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate start,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end) {
-        return collectionService.getByRange(start, end);
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end,
+            @AuthenticationPrincipal User currentUser) {
+        return collectionService.getByRange(start, end, currentUser.getOrganizationOwnerId());
     }
 
-    /**
-     * One-call summary for a loan phase: total collected so far, what's still
-     * owed, remaining days in the standard window, and the full dated payment
-     * history - powers the "remaining amount / remaining days" UI.
-     */
     @GetMapping("/loan-phase/{loanPhaseId}/summary")
     public Map<String, Object> getPhaseSummary(@PathVariable Long loanPhaseId) {
         LoanPhase phase = loanPhaseService.getById(loanPhaseId);

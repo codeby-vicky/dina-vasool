@@ -45,6 +45,9 @@ public class CollectionEntry {
 
     private String notes;
 
+    @Column(nullable = false)
+    private Long organizationOwnerId;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

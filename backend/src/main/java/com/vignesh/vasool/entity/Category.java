@@ -47,4 +47,7 @@ public class Category {
 
     @Column(nullable = false)
     private boolean active;
+
+    @Column(nullable = false)
+    private Long organizationOwnerId;
 }

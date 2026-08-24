@@ -3,10 +3,12 @@ package com.vignesh.vasool.service;
 import com.vignesh.vasool.dto.DayClosingResponse;
 import com.vignesh.vasool.entity.DayClosing;
 import com.vignesh.vasool.entity.LoanPhase;
+import com.vignesh.vasool.entity.User;
 import com.vignesh.vasool.repository.CollectionEntryRepository;
 import com.vignesh.vasool.repository.DayClosingRepository;
 import com.vignesh.vasool.repository.ExpenseRepository;
 import com.vignesh.vasool.repository.LoanPhaseRepository;
+import com.vignesh.vasool.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -15,19 +17,16 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 
 /**
- * Implements the daily mun-irupu (opening balance / investment) calculation:
+ * Implements the daily mun-irupu (opening balance / investment) calculation,
+ * scoped per organization (each signup/business has its own independent
+ * day-closing history):
  *
- *   a = openingBalance (yesterday's closingBalance)
- *       + totalCollection (today)
- *       + totalAadhaiyam (today, sum of aadhaiyam on any new/phase disbursements today)
- *       + additionalInvestment (extra money manually put in today, e.g. when mun-irupu
- *         alone isn't enough to cover today's adapu disbursements)
- *   b = a - totalAdapu (today, sum of principal disbursed today)
- *   c = b - totalExpenses (today)
- *
- *   c = closingBalance = tomorrow's opening mun-irupu / investment
+ *   a = openingBalance (yesterday's closingBalance) + totalCollection + totalAadhaiyam + additionalInvestment
+ *   b = a - totalAdapu
+ *   c = b - totalExpenses   -> closingBalance -> tomorrow's opening mun-irupu
  */
 @Service
 @RequiredArgsConstructor
@@ -37,17 +36,19 @@ public class DayClosingService {
     private final CollectionEntryRepository collectionEntryRepository;
     private final ExpenseRepository expenseRepository;
     private final LoanPhaseRepository loanPhaseRepository;
+    private final UserRepository userRepository;
 
     @Transactional
-    public DayClosingResponse closeDay(LocalDate date, BigDecimal additionalInvestment) {
-        if (dayClosingRepository.findByClosingDate(date).isPresent()) {
+    public DayClosingResponse closeDay(LocalDate date, BigDecimal additionalInvestment, Long orgId) {
+        if (dayClosingRepository.findByClosingDateAndOrganizationOwnerId(date, orgId).isPresent()) {
             throw new IllegalStateException("Day " + date + " is already closed. Reopen it first if you need to redo it.");
         }
 
-        Totals t = computeTotals(date, additionalInvestment);
+        Totals t = computeTotals(date, additionalInvestment, orgId);
 
         DayClosing closing = DayClosing.builder()
                 .closingDate(date)
+                .organizationOwnerId(orgId)
                 .openingBalance(t.openingBalance)
                 .totalCollection(t.totalCollection)
                 .totalAadhaiyam(t.totalAadhaiyam)
@@ -62,22 +63,22 @@ public class DayClosingService {
         return toResponse(t, date, true);
     }
 
-    public DayClosingResponse previewDay(LocalDate date, BigDecimal additionalInvestment) {
-        Totals t = computeTotals(date, additionalInvestment);
+    public DayClosingResponse previewDay(LocalDate date, BigDecimal additionalInvestment, Long orgId) {
+        Totals t = computeTotals(date, additionalInvestment, orgId);
         return toResponse(t, date, false);
     }
 
-    private Totals computeTotals(LocalDate date, BigDecimal additionalInvestment) {
+    private Totals computeTotals(LocalDate date, BigDecimal additionalInvestment, Long orgId) {
         BigDecimal openingBalance = dayClosingRepository
-                .findTopByClosingDateBeforeOrderByClosingDateDesc(date)
+                .findTopByClosingDateBeforeAndOrganizationOwnerIdOrderByClosingDateDesc(date, orgId)
                 .map(DayClosing::getClosingBalance)
                 .orElse(BigDecimal.ZERO);
 
-        BigDecimal totalCollection = collectionEntryRepository.sumAmountByDate(date);
-        BigDecimal totalExpenses = expenseRepository.sumAmountByDate(date);
+        BigDecimal totalCollection = collectionEntryRepository.sumAmountByDate(date, orgId);
+        BigDecimal totalExpenses = expenseRepository.sumAmountByDate(date, orgId);
         BigDecimal addlInvestment = additionalInvestment != null ? additionalInvestment : BigDecimal.ZERO;
 
-        List<LoanPhase> phasesToday = loanPhaseRepository.findByStartDate(date);
+        List<LoanPhase> phasesToday = loanPhaseRepository.findByStartDateAndOrganizationOwnerId(date, orgId);
         BigDecimal totalAadhaiyam = phasesToday.stream()
                 .map(LoanPhase::getAadhaiyam)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -101,19 +102,20 @@ public class DayClosingService {
     }
 
     @Transactional
-    public void reopenDay(LocalDate date) {
-        DayClosing closing = dayClosingRepository.findByClosingDate(date)
+    public void reopenDay(LocalDate date, Long orgId) {
+        DayClosing closing = dayClosingRepository.findByClosingDateAndOrganizationOwnerId(date, orgId)
                 .orElseThrow(() -> new IllegalArgumentException("No closing found for " + date));
         dayClosingRepository.delete(closing);
     }
 
     @Transactional
-    public DayClosingResponse setInitialInvestment(LocalDate date, BigDecimal amount) {
-        if (!dayClosingRepository.findAll().isEmpty()) {
+    public DayClosingResponse setInitialInvestment(LocalDate date, BigDecimal amount, Long orgId) {
+        if (dayClosingRepository.findTopByClosingDateBeforeAndOrganizationOwnerIdOrderByClosingDateDesc(date, orgId).isPresent()) {
             throw new IllegalStateException("Initial investment can only be set before any day has been closed.");
         }
         DayClosing closing = DayClosing.builder()
                 .closingDate(date.minusDays(1))
+                .organizationOwnerId(orgId)
                 .openingBalance(BigDecimal.ZERO)
                 .totalCollection(BigDecimal.ZERO)
                 .totalAadhaiyam(BigDecimal.ZERO)
@@ -124,22 +126,11 @@ public class DayClosingService {
                 .closed(true)
                 .build();
         dayClosingRepository.save(closing);
-        return DayClosingResponse.builder()
-                .date(date.minusDays(1))
-                .openingBalance(closing.getOpeningBalance())
-                .totalCollection(closing.getTotalCollection())
-                .totalAadhaiyam(closing.getTotalAadhaiyam())
-                .totalAdapu(closing.getTotalAdapu())
-                .totalExpenses(closing.getTotalExpenses())
-                .additionalInvestment(closing.getAdditionalInvestment())
-                .closingBalance(closing.getClosingBalance())
-                .closed(true)
-                .build();
+        return toResponse(null, date.minusDays(1), true, closing);
     }
 
-    /** Today's live collection total - used by the daily summary screen, refreshes after every collection. */
-    public BigDecimal getTodayCollectionTotal() {
-        return collectionEntryRepository.sumAmountByDate(LocalDate.now());
+    public BigDecimal getTodayCollectionTotal(Long orgId) {
+        return collectionEntryRepository.sumAmountByDate(LocalDate.now(), orgId);
     }
 
     private DayClosingResponse toResponse(Totals t, LocalDate date, boolean closed) {
@@ -156,6 +147,20 @@ public class DayClosingService {
                 .build();
     }
 
+    private DayClosingResponse toResponse(Totals ignored, LocalDate date, boolean closed, DayClosing c) {
+        return DayClosingResponse.builder()
+                .date(date)
+                .openingBalance(c.getOpeningBalance())
+                .totalCollection(c.getTotalCollection())
+                .totalAadhaiyam(c.getTotalAadhaiyam())
+                .totalAdapu(c.getTotalAdapu())
+                .totalExpenses(c.getTotalExpenses())
+                .additionalInvestment(c.getAdditionalInvestment())
+                .closingBalance(c.getClosingBalance())
+                .closed(closed)
+                .build();
+    }
+
     private static class Totals {
         BigDecimal openingBalance;
         BigDecimal totalCollection;
@@ -167,18 +172,21 @@ public class DayClosingService {
     }
 
     /**
-     * Runs every day at 23:59 IST. If the day hasn't been manually closed by
-     * then, closes it automatically so tomorrow's mun-irupu carries forward
-     * correctly without anyone having to remember to tap "Close Today's Day" -
-     * this is exactly the same calculation closeDay() does, just triggered by
-     * the clock instead of a button.
+     * Runs every day at 23:59 IST - once per organization (every distinct
+     * admin's business), not just once globally. Any org that hasn't been
+     * manually closed by then gets auto-closed using whatever was recorded.
      */
     @Scheduled(cron = "0 59 23 * * *", zone = "Asia/Kolkata")
     public void autoCloseDayIfNeeded() {
         LocalDate today = LocalDate.now();
-        if (dayClosingRepository.findByClosingDate(today).isPresent()) {
-            return; // already closed manually today
+        Set<Long> orgIds = userRepository.findAll().stream()
+                .map(User::getOrganizationOwnerId)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        for (Long orgId : orgIds) {
+            if (dayClosingRepository.findByClosingDateAndOrganizationOwnerId(today, orgId).isEmpty()) {
+                closeDay(today, null, orgId);
+            }
         }
-        closeDay(today, null);
     }
 }

@@ -29,6 +29,9 @@ public class Customer {
 
     private String address; // used as "area" for location-based search
 
+    @Column(nullable = false)
+    private Long organizationOwnerId;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

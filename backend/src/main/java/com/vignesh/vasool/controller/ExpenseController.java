@@ -27,7 +27,8 @@ public class ExpenseController {
     }
 
     @GetMapping
-    public List<Expense> getByDate(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        return expenseService.getByDate(date);
+    public List<Expense> getByDate(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+                                    @AuthenticationPrincipal User currentUser) {
+        return expenseService.getByDate(date, currentUser.getOrganizationOwnerId());
     }
 }

@@ -10,7 +10,11 @@
     },
     "android": {
       "package": "com.vignesh.dinavasool",
-      "permissions": ["READ_CONTACTS"],
+      "permissions": [
+        "READ_CONTACTS",
+        "android.permission.READ_CONTACTS",
+        "android.permission.WRITE_CONTACTS"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#0F172A"
       }
@@ -22,6 +26,11 @@
           "contactsPermission": "Allow Dina Vasool to access your contacts to search customers by saved name."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "0d08c45b-2898-4df8-bf84-2d6d8064fe90"
+      }
+    }
   }
 }

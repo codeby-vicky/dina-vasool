@@ -16,17 +16,6 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
 
-/**
- * Handles disbursement (a new loan phase for a customer under a category).
- *
- * Default calculation (matches the "per 1000" business rule):
- *   aadhaiyam    = adapu * (deductionRatePer1000 / 1000)   e.g. 10000 * 50/1000  = 500
- *   totalPayable = adapu * (repayRatePer1000     / 1000)   e.g. 10000 * 1200/1000 = 12000
- *   customer actually receives: adapu - aadhaiyam           e.g. 10000 - 500      = 9500
- *
- * Staff can override aadhaiyam and/or totalPayable manually; when they do,
- * autoCalculated is set to false so reports can flag it was a manual entry.
- */
 @Service
 @RequiredArgsConstructor
 public class LoanPhaseService {
@@ -72,12 +61,12 @@ public class LoanPhaseService {
                 .phaseNumber(phaseNumber)
                 .status(LoanPhase.PhaseStatus.ACTIVE)
                 .disbursedBy(disbursedBy)
+                .organizationOwnerId(disbursedBy.getOrganizationOwnerId())
                 .build();
 
         return loanPhaseRepository.save(phase);
     }
 
-    /** Amount the customer actually walks away with (adapu - aadhaiyam). */
     public BigDecimal amountReceivedByCustomer(LoanPhase phase) {
         return phase.getAdapu().subtract(phase.getAadhaiyam());
     }
@@ -91,23 +80,21 @@ public class LoanPhaseService {
         return loanPhaseRepository.findByCustomerId(customerId);
     }
 
-    /** All currently active/overdue loan phases across every customer - used for the Excel export. */
-    public List<LoanPhase> getAllActiveAndOverduePhases() {
-        return loanPhaseRepository.findByStatusInWithCustomer(List.of(LoanPhase.PhaseStatus.ACTIVE, LoanPhase.PhaseStatus.OVERDUE));
+    /** All currently active/overdue loan phases for one organization - used for the Excel export and status labels. */
+    public List<LoanPhase> getAllActiveAndOverduePhases(Long orgId) {
+        return loanPhaseRepository.findByStatusInWithCustomer(
+                List.of(LoanPhase.PhaseStatus.ACTIVE, LoanPhase.PhaseStatus.OVERDUE), orgId);
     }
 
-    public List<LoanPhase> getPhasesDisbursedOn(LocalDate date) {
-        return loanPhaseRepository.findByStartDate(date);
+    public List<LoanPhase> getPhasesDisbursedOn(LocalDate date, Long orgId) {
+        return loanPhaseRepository.findByStartDateAndOrganizationOwnerId(date, orgId);
     }
 
-    /**
-     * Flags phases that have crossed their standardDays window as OVERDUE.
-     * Per the business rule: crossing day 60 (or whatever standardDays is)
-     * does NOT add extra interest - it just means collection continues
-     * until totalPayable is fully recovered.
-     */
+    /** Flags overdue phases - runs across all organizations, just a status flag, no data leakage. */
     public void markOverduePhases() {
-        List<LoanPhase> active = loanPhaseRepository.findByStatus(LoanPhase.PhaseStatus.ACTIVE);
+        List<LoanPhase> active = loanPhaseRepository.findAll().stream()
+                .filter(p -> p.getStatus() == LoanPhase.PhaseStatus.ACTIVE)
+                .toList();
         LocalDate today = LocalDate.now();
         for (LoanPhase phase : active) {
             if (phase.getStartDate().plusDays(phase.getStandardDays()).isBefore(today)) {

@@ -19,11 +19,9 @@ public class CustomerService {
     private final LoanPhaseRepository loanPhaseRepository;
     private final CollectionEntryRepository collectionEntryRepository;
 
-    public Customer create(CustomerRequest request) {
-        // Prevent duplicates by phone only when a phone number was actually given -
-        // customers added with just a name (no phone) always create a new row.
+    public Customer create(CustomerRequest request, Long orgId) {
         if (request.getPhone() != null && !request.getPhone().isBlank()) {
-            List<Customer> existing = customerRepository.findByPhone(request.getPhone());
+            List<Customer> existing = customerRepository.findByPhoneAndOrganizationOwnerId(request.getPhone(), orgId);
             if (!existing.isEmpty()) {
                 return existing.get(0);
             }
@@ -32,16 +30,13 @@ public class CustomerService {
                 .name(request.getName())
                 .phone(request.getPhone())
                 .address(request.getAddress())
+                .organizationOwnerId(orgId)
                 .build();
         return customerRepository.save(customer);
     }
 
-    public List<Customer> search(String query) {
-        if (query == null || query.isBlank()) {
-            return customerRepository.findAll();
-        }
-        return customerRepository.findByNameContainingIgnoreCaseOrPhoneContainingOrAddressContainingIgnoreCase(
-                query, query, query);
+    public List<Customer> search(String query, Long orgId) {
+        return customerRepository.search(orgId, query == null ? "" : query);
     }
 
     public Customer getById(Long id) {
@@ -49,12 +44,6 @@ public class CustomerService {
                 .orElseThrow(() -> new IllegalArgumentException("Customer not found: " + id));
     }
 
-    public List<Customer> getAll() {
-        return customerRepository.findAll();
-    }
-
-    /** Updates name/phone/area on an existing customer only - never touches
-     *  their loan phases or collection history, and never creates a new row. */
     public Customer update(Long id, CustomerRequest request) {
         Customer customer = getById(id);
         customer.setName(request.getName());
@@ -63,10 +52,6 @@ public class CustomerService {
         return customerRepository.save(customer);
     }
 
-    /**
-     * Deletes a customer and everything tied to them (collection history,
-     * loan phases). Used for the "accidentally added" cleanup case.
-     */
     @Transactional
     public void delete(Long id) {
         if (!customerRepository.existsById(id)) {

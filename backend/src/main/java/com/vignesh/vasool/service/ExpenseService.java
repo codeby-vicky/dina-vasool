@@ -23,15 +23,16 @@ public class ExpenseService {
                 .amount(request.getAmount())
                 .description(request.getDescription())
                 .recordedBy(recordedBy)
+                .organizationOwnerId(recordedBy.getOrganizationOwnerId())
                 .build();
         return expenseRepository.save(expense);
     }
 
-    public List<Expense> getByDate(LocalDate date) {
-        return expenseRepository.findByExpenseDate(date);
+    public List<Expense> getByDate(LocalDate date, Long orgId) {
+        return expenseRepository.findByExpenseDateAndOrganizationOwnerId(date, orgId);
     }
 
-    public BigDecimal getTotalForDate(LocalDate date) {
-        return expenseRepository.sumAmountByDate(date);
+    public BigDecimal getTotalForDate(LocalDate date, Long orgId) {
+        return expenseRepository.sumAmountByDate(date, orgId);
     }
 }
