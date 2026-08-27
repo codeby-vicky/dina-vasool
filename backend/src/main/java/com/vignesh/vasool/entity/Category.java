@@ -12,9 +12,22 @@ import java.math.BigDecimal;
  * Dynamic, admin-defined categories (e.g. "10000 phase", "5000 phase").
  * deductionRatePer1000 and repayRatePer1000 drive the aadhaiyam/total-payable
  * calculation and can be overridden per loan phase if needed.
+ *
+ * Uniqueness is (name, organizationOwnerId) - NOT name alone. Two different
+ * organizations are allowed to both have a category named "1000"; only
+ * duplicates within the SAME organization are blocked. Enforced here via the
+ * composite unique constraint below, matching the actual DB constraint
+ * categories_name_org_unique - do not add unique=true back onto name alone,
+ * that recreates the old single-column bug.
  */
 @Entity
-@Table(name = "categories")
+@Table(
+    name = "categories",
+    uniqueConstraints = @UniqueConstraint(
+        name = "categories_name_org_unique",
+        columnNames = {"name", "organization_owner_id"}
+    )
+)
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -25,29 +38,23 @@ public class Category {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String name;
 
-    // e.g. 50 -> 50 deducted per 1000 given (aadhaiyam rate)
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal deductionRatePer1000;
 
-    // e.g. 1200 -> customer repays 1200 per 1000 given (total payable rate)
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal repayRatePer1000;
 
-    // e.g. 60 -> standard repayment window in days before it's "overdue" (no extra interest after)
     @Column(nullable = false)
     private Integer standardDays;
 
-    // Optional - when set, selecting this category auto-fills the Adapu (principal) field
-    // with this amount so the collector doesn't have to type it manually every time.
     @Column(precision = 12, scale = 2)
     private BigDecimal defaultAmount;
 
     @Column(nullable = false)
     private boolean active;
 
-    @Column(nullable = false)
     private Long organizationOwnerId;
 }

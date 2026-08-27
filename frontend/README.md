@@ -1,4 +1,4 @@
-# Dina Vasool (தின வசூல்) — Daily Collection App
+# Dina Vasool — Daily Collection App
 
 ## What's built
 - Login (JWT, stored on device, persists across app restarts)
