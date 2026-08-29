@@ -20,6 +20,13 @@ public class CollectionService {
     private final CollectionEntryRepository collectionEntryRepository;
     private final LoanPhaseRepository loanPhaseRepository;
 
+    /**
+     * Records or REPLACES a day's payment. If an entry already exists for this
+     * loan phase on this exact date (today OR any past date), it's replaced
+     * with the new amount/mode instead of duplicated - this is also how
+     * correcting a mistaken entry for yesterday (or any earlier day) works:
+     * just call this again with that same date and the corrected amount.
+     */
     public CollectionEntry record(CollectionRequest request, User collectedBy) {
         LoanPhase phase = loanPhaseRepository.findById(request.getLoanPhaseId())
                 .orElseThrow(() -> new IllegalArgumentException("Loan phase not found: " + request.getLoanPhaseId()));
@@ -41,6 +48,7 @@ public class CollectionService {
         entry.setAmount(request.getAmount());
         entry.setCollectedBy(collectedBy);
         entry.setNotes(request.getNotes());
+        entry.setPaymentMode(request.getPaymentMode() != null ? request.getPaymentMode() : "CASH");
 
         CollectionEntry saved = collectionEntryRepository.save(entry);
 
@@ -48,6 +56,12 @@ public class CollectionService {
         if (totalCollected.compareTo(phase.getTotalPayable()) >= 0
                 && phase.getStatus() != LoanPhase.PhaseStatus.CLOSED) {
             phase.setStatus(LoanPhase.PhaseStatus.CLOSED);
+            loanPhaseRepository.save(phase);
+        } else if (totalCollected.compareTo(phase.getTotalPayable()) < 0
+                && phase.getStatus() == LoanPhase.PhaseStatus.CLOSED) {
+            // If an edit REDUCED a past amount and the phase no longer meets
+            // totalPayable, correctly reopen it instead of leaving it wrongly closed.
+            phase.setStatus(LoanPhase.PhaseStatus.ACTIVE);
             loanPhaseRepository.save(phase);
         }
 

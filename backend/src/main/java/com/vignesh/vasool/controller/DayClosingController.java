@@ -23,16 +23,18 @@ public class DayClosingController {
     public DayClosingResponse preview(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) BigDecimal additionalInvestment,
+            @RequestParam(required = false) BigDecimal openingBalanceOverride,
             @AuthenticationPrincipal User currentUser) {
-        return dayClosingService.previewDay(date, additionalInvestment, currentUser.getOrganizationOwnerId());
+        return dayClosingService.previewDay(date, additionalInvestment, openingBalanceOverride, currentUser.getOrganizationOwnerId());
     }
 
     @PostMapping("/close")
     public DayClosingResponse close(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) BigDecimal additionalInvestment,
+            @RequestParam(required = false) BigDecimal openingBalanceOverride,
             @AuthenticationPrincipal User currentUser) {
-        return dayClosingService.closeDay(date, additionalInvestment, currentUser.getOrganizationOwnerId());
+        return dayClosingService.closeDay(date, additionalInvestment, openingBalanceOverride, currentUser.getOrganizationOwnerId());
     }
 
     @PostMapping("/reopen")

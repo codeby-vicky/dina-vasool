@@ -20,13 +20,14 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Implements the daily mun-irupu (opening balance / investment) calculation,
- * scoped per organization (each signup/business has its own independent
- * day-closing history):
- *
- *   a = openingBalance (yesterday's closingBalance) + totalCollection + totalAadhaiyam + additionalInvestment
+ * Day-closing (mun-irupu) calculation, scoped per organization:
+ *   a = openingBalance + totalCollection + totalAadhaiyam + additionalInvestment
  *   b = a - totalAdapu
- *   c = b - totalExpenses   -> closingBalance -> tomorrow's opening mun-irupu
+ *   c = b - totalExpenses -> closingBalance -> tomorrow's opening mun-irupu
+ *
+ * openingBalance normally comes from yesterday's closingBalance automatically,
+ * but can be manually overridden (e.g. to correct a mistake) via
+ * openingBalanceOverride on preview/close.
  */
 @Service
 @RequiredArgsConstructor
@@ -39,12 +40,12 @@ public class DayClosingService {
     private final UserRepository userRepository;
 
     @Transactional
-    public DayClosingResponse closeDay(LocalDate date, BigDecimal additionalInvestment, Long orgId) {
+    public DayClosingResponse closeDay(LocalDate date, BigDecimal additionalInvestment, BigDecimal openingBalanceOverride, Long orgId) {
         if (dayClosingRepository.findByClosingDateAndOrganizationOwnerId(date, orgId).isPresent()) {
             throw new IllegalStateException("Day " + date + " is already closed. Reopen it first if you need to redo it.");
         }
 
-        Totals t = computeTotals(date, additionalInvestment, orgId);
+        Totals t = computeTotals(date, additionalInvestment, openingBalanceOverride, orgId);
 
         DayClosing closing = DayClosing.builder()
                 .closingDate(date)
@@ -63,16 +64,21 @@ public class DayClosingService {
         return toResponse(t, date, true);
     }
 
-    public DayClosingResponse previewDay(LocalDate date, BigDecimal additionalInvestment, Long orgId) {
-        Totals t = computeTotals(date, additionalInvestment, orgId);
+    public DayClosingResponse previewDay(LocalDate date, BigDecimal additionalInvestment, BigDecimal openingBalanceOverride, Long orgId) {
+        Totals t = computeTotals(date, additionalInvestment, openingBalanceOverride, orgId);
         return toResponse(t, date, false);
     }
 
-    private Totals computeTotals(LocalDate date, BigDecimal additionalInvestment, Long orgId) {
-        BigDecimal openingBalance = dayClosingRepository
-                .findTopByClosingDateBeforeAndOrganizationOwnerIdOrderByClosingDateDesc(date, orgId)
-                .map(DayClosing::getClosingBalance)
-                .orElse(BigDecimal.ZERO);
+    private Totals computeTotals(LocalDate date, BigDecimal additionalInvestment, BigDecimal openingBalanceOverride, Long orgId) {
+        BigDecimal openingBalance;
+        if (openingBalanceOverride != null) {
+            openingBalance = openingBalanceOverride;
+        } else {
+            openingBalance = dayClosingRepository
+                    .findTopByClosingDateBeforeAndOrganizationOwnerIdOrderByClosingDateDesc(date, orgId)
+                    .map(DayClosing::getClosingBalance)
+                    .orElse(BigDecimal.ZERO);
+        }
 
         BigDecimal totalCollection = collectionEntryRepository.sumAmountByDate(date, orgId);
         BigDecimal totalExpenses = expenseRepository.sumAmountByDate(date, orgId);
@@ -171,11 +177,6 @@ public class DayClosingService {
         BigDecimal closingBalance;
     }
 
-    /**
-     * Runs every day at 23:59 IST - once per organization (every distinct
-     * admin's business), not just once globally. Any org that hasn't been
-     * manually closed by then gets auto-closed using whatever was recorded.
-     */
     @Scheduled(cron = "0 59 23 * * *", zone = "Asia/Kolkata")
     public void autoCloseDayIfNeeded() {
         LocalDate today = LocalDate.now();
@@ -185,7 +186,7 @@ public class DayClosingService {
                 .collect(java.util.stream.Collectors.toSet());
         for (Long orgId : orgIds) {
             if (dayClosingRepository.findByClosingDateAndOrganizationOwnerId(today, orgId).isEmpty()) {
-                closeDay(today, null, orgId);
+                closeDay(today, null, null, orgId);
             }
         }
     }

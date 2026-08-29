@@ -23,8 +23,8 @@ export default function ReportsScreen() {
   const [loading, setLoading] = useState(false);
   const [closing, setClosing] = useState(false);
   const [additionalInvestment, setAdditionalInvestment] = useState("");
+  const [openingBalanceOverride, setOpeningBalanceOverride] = useState("");
 
-  // Expenses - multiple quick entries (petrol, milk, groceries...), each its own tap
   const [expenses, setExpenses] = useState([]);
   const [expenseDesc, setExpenseDesc] = useState("");
   const [expenseAmount, setExpenseAmount] = useState("");
@@ -39,10 +39,27 @@ export default function ReportsScreen() {
     }
   }, [date]);
 
+  const loadPreview = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = { date };
+      if (additionalInvestment) params.additionalInvestment = additionalInvestment;
+      if (openingBalanceOverride) params.openingBalanceOverride = openingBalanceOverride;
+      const { data } = await client.get("/api/day-closing/preview", { params });
+      setPreview(data);
+    } catch (err) {
+      Alert.alert("Error", err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [date, additionalInvestment, openingBalanceOverride]);
+
+  // Auto-load the moment this screen opens - no button tap needed to see today's numbers.
   useFocusEffect(
     useCallback(() => {
       loadExpenses();
-    }, [loadExpenses])
+      loadPreview();
+    }, [loadExpenses, loadPreview])
   );
 
   const addExpense = async () => {
@@ -65,26 +82,11 @@ export default function ReportsScreen() {
       setExpenseDesc("");
       setExpenseAmount("");
       await loadExpenses();
-      if (preview) loadPreview(); // keep the report in sync if it's already loaded
+      loadPreview();
     } catch (err) {
       Alert.alert("Error", err.message);
     } finally {
       setAddingExpense(false);
-    }
-  };
-
-  const loadPreview = async (invAmount) => {
-    setLoading(true);
-    try {
-      const params = { date };
-      const inv = invAmount !== undefined ? invAmount : additionalInvestment;
-      if (inv) params.additionalInvestment = inv;
-      const { data } = await client.get("/api/day-closing/preview", { params });
-      setPreview(data);
-    } catch (err) {
-      Alert.alert("Error", err.message);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -94,13 +96,13 @@ export default function ReportsScreen() {
   const applyShortfallAsInvestment = () => {
     if (!shortfall) return;
     setAdditionalInvestment(String(shortfall));
-    loadPreview(String(shortfall));
+    setTimeout(loadPreview, 0);
   };
 
   const closeDay = async () => {
     Alert.alert(
       "Close today's day?",
-      "This locks today's calculation and sets tomorrow's opening mun-irupu. This can't be casually undone.\n\n(Note: if you don't close manually, the day auto-closes on its own at 11:59 PM.)",
+      "This locks today's calculation and sets tomorrow's opening mun-irupu. This can't be casually undone.\n\n(If you don't close manually, the day auto-closes on its own at 11:59 PM.)",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -111,6 +113,7 @@ export default function ReportsScreen() {
             try {
               const params = { date };
               if (additionalInvestment) params.additionalInvestment = additionalInvestment;
+              if (openingBalanceOverride) params.openingBalanceOverride = openingBalanceOverride;
               const { data } = await client.post("/api/day-closing/close", null, { params });
               setPreview(data);
               Alert.alert("Day closed", "Today's collection has been finalized.");
@@ -129,25 +132,26 @@ export default function ReportsScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: scaleWidth(16) }}>
-      <Text style={styles.title}>Today's Report</Text>
-      <Text style={styles.dateText}>{date}</Text>
+      <View style={styles.headerRow}>
+        <View>
+          <Text style={styles.title}>Today's Report</Text>
+          <Text style={styles.dateText}>{date}</Text>
+        </View>
+        {loading && <ActivityIndicator color="#2563EB" />}
+      </View>
 
       <View style={styles.explainBox}>
         <Text style={styles.explainText}>
-          How this is calculated: (Yesterday's leftover) + (today's collection) + (today's
-          aadhaiyam from new loans) + (any extra investment you add below) − (money given out
-          today) − (today's expenses) = tomorrow's opening balance.{"\n\n"}
-          If you don't close the day manually, it auto-closes on its own at 11:59 PM using
-          whatever was recorded up to that point.
+          (Opening balance) + (today's collection) + (today's aadhaiyam) + (extra investment) −
+          (money given out) − (expenses) = tomorrow's opening balance.{"\n\n"}
+          This screen recalculates automatically. Auto-closes at 11:59 PM if not closed manually.
         </Text>
       </View>
 
       {/* Expenses - add as many as needed, one at a time */}
       <View style={styles.expenseBox}>
         <Text style={styles.sectionTitle}>Today's Expenses</Text>
-        <Text style={styles.expenseHint}>
-          Add each expense separately as it happens - petrol now, milk later, etc.
-        </Text>
+        <Text style={styles.expenseHint}>Add each one as it happens - petrol now, milk later.</Text>
 
         {expenses.length > 0 && (
           <View style={styles.expenseList}>
@@ -181,44 +185,53 @@ export default function ReportsScreen() {
           keyboardType="numeric"
         />
         <TouchableOpacity style={styles.addExpenseButton} onPress={addExpense} disabled={addingExpense}>
-          <Text style={styles.addExpenseButtonText}>
-            {addingExpense ? "Adding..." : "+ Add Expense"}
-          </Text>
+          <Text style={styles.addExpenseButtonText}>{addingExpense ? "Adding..." : "+ Add Expense"}</Text>
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity style={styles.previewButton} onPress={() => loadPreview()} disabled={loading}>
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.previewButtonText}>Load / Refresh Preview</Text>
-        )}
-      </TouchableOpacity>
-
       {preview && (
         <View style={styles.card}>
-          <Row label="Opening Balance (Mun-Irupu)" value={preview.openingBalance} />
+          <View style={styles.editableRow}>
+            <Text style={styles.rowLabel}>Opening Balance (Mun-Irupu)</Text>
+            <TextInput
+              style={styles.inlineInput}
+              value={openingBalanceOverride}
+              onChangeText={setOpeningBalanceOverride}
+              placeholder={String(preview.openingBalance)}
+              placeholderTextColor="#64748B"
+              keyboardType="numeric"
+              onEndEditing={loadPreview}
+            />
+          </View>
           <Row label="Today's Collection" value={preview.totalCollection} />
           <Row label="Aadhaiyam (new disbursements)" value={preview.totalAadhaiyam} />
-          <Row label="Additional Investment (added)" value={preview.additionalInvestment} />
+          <View style={styles.editableRow}>
+            <Text style={styles.rowLabel}>Additional Investment</Text>
+            <TextInput
+              style={styles.inlineInput}
+              value={additionalInvestment}
+              onChangeText={setAdditionalInvestment}
+              placeholder="0"
+              placeholderTextColor="#64748B"
+              keyboardType="numeric"
+              onEndEditing={loadPreview}
+            />
+          </View>
           <Row label="Adapu (principal disbursed)" value={preview.totalAdapu} negative />
           <Row label="Expenses" value={preview.totalExpenses} negative />
           <View style={styles.divider} />
           <Row label="Closing Balance → Tomorrow's Mun-Irupu" value={preview.closingBalance} bold />
           <Text style={styles.statusText}>
-            {preview.closed ? "✓ Day is closed" : "Not yet closed — this is a preview"}
+            {preview.closed ? "✓ Day is closed" : "Not yet closed — live preview"}
           </Text>
 
           {shortfall && !preview.closed && (
             <View style={styles.shortfallBox}>
               <Text style={styles.shortfallText}>
                 Mun-irupu falls short by ₹{shortfall.toFixed(2)} to cover today's loans given out.
-                Add that as extra investment below, or type your own amount.
               </Text>
               <TouchableOpacity style={styles.shortfallButton} onPress={applyShortfallAsInvestment}>
-                <Text style={styles.shortfallButtonText}>
-                  Add ₹{shortfall.toFixed(2)} as Investment
-                </Text>
+                <Text style={styles.shortfallButtonText}>Add ₹{shortfall.toFixed(2)} as Investment</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -226,29 +239,8 @@ export default function ReportsScreen() {
       )}
 
       {preview && !preview.closed && (
-        <View style={styles.investmentBox}>
-          <Text style={styles.label}>Additional Investment (optional)</Text>
-          <TextInput
-            style={styles.investmentInput}
-            value={additionalInvestment}
-            onChangeText={setAdditionalInvestment}
-            placeholder="e.g. 5000"
-            placeholderTextColor="#94A3B8"
-            keyboardType="numeric"
-          />
-          <TouchableOpacity style={styles.recalcButton} onPress={() => loadPreview()}>
-            <Text style={styles.recalcButtonText}>Recalculate with this investment</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {preview && !preview.closed && (
         <TouchableOpacity style={styles.closeButton} onPress={closeDay} disabled={closing}>
-          {closing ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.closeButtonText}>Close Today's Day</Text>
-          )}
+          {closing ? <ActivityIndicator color="#fff" /> : <Text style={styles.closeButtonText}>Close Today's Day</Text>}
         </TouchableOpacity>
       )}
     </ScrollView>
@@ -268,6 +260,7 @@ function Row({ label, value, negative, bold }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0F172A" },
+  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   title: { color: "#F8FAFC", fontSize: scaleFont(22), fontWeight: "700" },
   dateText: { color: "#94A3B8", fontSize: scaleFont(13), marginBottom: scaleHeight(12) },
   explainBox: { backgroundColor: "#1E293B", borderRadius: 10, padding: scaleWidth(12), marginBottom: scaleHeight(14) },
@@ -283,47 +276,33 @@ const styles = StyleSheet.create({
   expenseTotalLabel: { color: "#F8FAFC", fontSize: scaleFont(13), fontWeight: "700" },
   expenseTotalValue: { color: "#F87171", fontSize: scaleFont(14), fontWeight: "700" },
   input: {
-    backgroundColor: "#0F172A",
-    borderRadius: 10,
-    paddingHorizontal: scaleWidth(14),
-    paddingVertical: scaleHeight(12),
-    color: "#F8FAFC",
-    fontSize: scaleFont(14),
-    borderWidth: 1,
-    borderColor: "#334155",
-    marginBottom: scaleHeight(10),
+    backgroundColor: "#0F172A", borderRadius: 10, paddingHorizontal: scaleWidth(14), paddingVertical: scaleHeight(12),
+    color: "#F8FAFC", fontSize: scaleFont(14), borderWidth: 1, borderColor: "#334155", marginBottom: scaleHeight(10),
   },
   addExpenseButton: { backgroundColor: "#DC2626", borderRadius: 10, paddingVertical: scaleHeight(12), alignItems: "center" },
   addExpenseButtonText: { color: "#fff", fontSize: scaleFont(13), fontWeight: "700" },
-  previewButton: { backgroundColor: "#2563EB", borderRadius: 10, paddingVertical: scaleHeight(12), alignItems: "center", marginBottom: scaleHeight(16) },
-  previewButtonText: { color: "#fff", fontSize: scaleFont(14), fontWeight: "600" },
   card: { backgroundColor: "#1E293B", borderRadius: 14, padding: scaleWidth(16) },
   row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: scaleHeight(8) },
+  editableRow: {
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: scaleHeight(6),
+  },
   rowLabel: { color: "#94A3B8", fontSize: scaleFont(13), flex: 1 },
   rowValue: { color: "#F8FAFC", fontSize: scaleFont(14), fontWeight: "600" },
   rowValueNegative: { color: "#F87171" },
   rowValueBold: { fontSize: scaleFont(17), color: "#4ADE80" },
+  inlineInput: {
+    backgroundColor: "#0F172A", borderRadius: 8, paddingHorizontal: scaleWidth(10), paddingVertical: scaleHeight(6),
+    color: "#F8FAFC", fontSize: scaleFont(13), borderWidth: 1, borderColor: "#334155", width: scaleWidth(110), textAlign: "right",
+  },
   divider: { height: 1, backgroundColor: "#334155", marginVertical: scaleHeight(8) },
   statusText: { color: "#94A3B8", fontSize: scaleFont(12), marginTop: scaleHeight(10), textAlign: "center" },
   shortfallBox: { backgroundColor: "#7C2D12", borderRadius: 10, padding: scaleWidth(12), marginTop: scaleHeight(14) },
   shortfallText: { color: "#FED7AA", fontSize: scaleFont(12), marginBottom: scaleHeight(10) },
   shortfallButton: { backgroundColor: "#EA580C", borderRadius: 8, paddingVertical: scaleHeight(10), alignItems: "center" },
   shortfallButtonText: { color: "#fff", fontSize: scaleFont(13), fontWeight: "700" },
-  investmentBox: { backgroundColor: "#1E293B", borderRadius: 14, padding: scaleWidth(16), marginTop: scaleHeight(14) },
-  label: { color: "#CBD5E1", fontSize: scaleFont(13), marginBottom: scaleHeight(8) },
-  investmentInput: {
-    backgroundColor: "#0F172A",
-    borderRadius: 10,
-    paddingHorizontal: scaleWidth(14),
-    paddingVertical: scaleHeight(12),
-    color: "#F8FAFC",
-    fontSize: scaleFont(15),
-    borderWidth: 1,
-    borderColor: "#334155",
-    marginBottom: scaleHeight(12),
+  closeButton: {
+    backgroundColor: "#DC2626", borderRadius: 10, paddingVertical: scaleHeight(14), alignItems: "center",
+    marginTop: scaleHeight(20), marginBottom: scaleHeight(30),
   },
-  recalcButton: { backgroundColor: "#334155", borderRadius: 10, paddingVertical: scaleHeight(10), alignItems: "center" },
-  recalcButtonText: { color: "#F8FAFC", fontSize: scaleFont(13), fontWeight: "600" },
-  closeButton: { backgroundColor: "#DC2626", borderRadius: 10, paddingVertical: scaleHeight(14), alignItems: "center", marginTop: scaleHeight(20), marginBottom: scaleHeight(30) },
   closeButtonText: { color: "#fff", fontSize: scaleFont(15), fontWeight: "700" },
 });

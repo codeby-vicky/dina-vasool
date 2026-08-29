@@ -13,8 +13,8 @@ import java.time.LocalDateTime;
 
 /**
  * A single day's payment from a customer against their active loan phase.
- * Amount is fully dynamic (customer may pay any amount on any day).
- * Named CollectionEntry (not Collection) to avoid clashing with java.util.Collection.
+ * Amount is fully dynamic. Named CollectionEntry (not Collection) to avoid
+ * clashing with java.util.Collection.
  */
 @Entity
 @Table(name = "collection_entries")
@@ -39,13 +39,17 @@ public class CollectionEntry {
     @Column(nullable = false)
     private LocalDate collectedDate;
 
+    // "CASH" or "GPAY" - defaults to CASH when not specified
+    @Column(nullable = false)
+    @Builder.Default
+    private String paymentMode = "CASH";
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "collected_by", nullable = false)
     private User collectedBy;
 
     private String notes;
 
-    @Column(nullable = false)
     private Long organizationOwnerId;
 
     @Column(nullable = false, updatable = false)
