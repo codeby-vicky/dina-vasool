@@ -11,11 +11,6 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-/**
- * A single day's payment from a customer against their active loan phase.
- * Amount is fully dynamic. Named CollectionEntry (not Collection) to avoid
- * clashing with java.util.Collection.
- */
 @Entity
 @Table(name = "collection_entries")
 @Data
@@ -39,8 +34,10 @@ public class CollectionEntry {
     @Column(nullable = false)
     private LocalDate collectedDate;
 
-    // "CASH" or "GPAY" - defaults to CASH when not specified
-    @Column(nullable = false)
+    // "CASH" or "GPAY". columnDefinition includes a SQL-level default so that
+    // BOTH a fresh database create AND an ALTER on an existing populated table
+    // can satisfy NOT NULL without a separate backfill step.
+    @Column(nullable = false, columnDefinition = "varchar(10) default 'CASH'")
     @Builder.Default
     private String paymentMode = "CASH";
 
